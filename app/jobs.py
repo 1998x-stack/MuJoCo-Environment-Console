@@ -43,7 +43,7 @@ def fingerprint(descriptor):
 def write_json(path, obj):
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix('.tmp')
+    tmp = target.with_name(f'.{target.name}.{os.getpid()}.{threading.get_ident()}.tmp')
     tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf8')
     os.replace(tmp, target)
 
