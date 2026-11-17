@@ -253,8 +253,8 @@ async def session_stream(sid: str, _: bool = Depends(authenticated)):
             if next_seq > seq and jpeg:
                 seq = next_seq
                 yield (
-                    b'--frame\\r\\nContent-Type: image/jpeg\\r\\nContent-Length: '
-                    + str(len(jpeg)).encode() + b'\\r\\n\\r\\n' + jpeg + b'\\r\\n'
+                    b'--frame\r\nContent-Type: image/jpeg\r\nContent-Length: '
+                    + str(len(jpeg)).encode() + b'\r\n\r\n' + jpeg + b'\\r\\n'
                 )
             elif not session.process.is_alive() or session._closed:
                 return
