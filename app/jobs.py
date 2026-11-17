@@ -36,7 +36,9 @@ def fingerprint(descriptor):
             if not resolved.is_relative_to(root):
                 continue
             digest.update(asset.relative_to(root).as_posix().encode('utf8'))
-            digest.update(asset.read_bytes())
+            with asset.open('rb') as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                    digest.update(chunk)
     return digest.hexdigest()
 
 
