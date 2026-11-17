@@ -4,16 +4,23 @@
 
 ## 获取源码
 
-完整源码归档包含 FastAPI 服务、Web UI、环境注册器、训练/仿真 worker、Docker 部署配置、测试、环境 Manifest Schema 和环境扩展说明：
+完整源码归档包含 FastAPI 服务、Web UI、环境注册器、训练/仿真 worker、Docker 部署配置、测试、环境 Manifest Schema 和环境扩展说明。
 
-- [源码归档](release/mujoco-console-source.tar.xz)
-- SHA-256：`2721a58736c66bc79bdce5384c217d6afd7ef46fcd3bf445899f5f7475964fed`
-
-解压后会得到 `mujoco-console/` 目录：
+仓库采用压缩源码分片存储。先重组并校验源码包：
 
 ```bash
 git clone https://github.com/1998x-stack/MuJoCo-Environment-Console.git
 cd MuJoCo-Environment-Console
+bash scripts/assemble-source.sh
+```
+
+校验成功后会生成 `release/mujoco-console-source.tar.xz`，SHA-256：
+
+`2721a58736c66bc79bdce5384c217d6afd7ef46fcd3bf445899f5f7475964fed`
+
+然后解压并部署：
+
+```bash
 tar -xJf release/mujoco-console-source.tar.xz
 cd mujoco-console
 bash scripts/deploy.sh
