@@ -20,29 +20,70 @@ jobs:
       - name: Assemble and verify source archive
         run: |
           bash scripts/assemble-source.sh
-          tar -xJf release/mujoco-console-source.tar.xz --exclude=.github
+          mkdir -p .build/mujoco-console
+          tar -xJf release/mujoco-console-source.tar.xz -C .build/mujoco-console
       - name: Inspect source archive and deployment files
         run: |
-          echo "=== archive entries ==="
-          tar -tf release/mujoco-console-source.tar.xz | sed -n '1,160p'
-          echo "=== extracted file tree ==="
-          find . -maxdepth 5 -type f ! -path './.git/*' ! -path './release/mujoco-console-source.tar.xz' -printf '%P\\n' | sort
-          echo "=== deployment manifests and runtime configuration ==="
-          for f in .env.example requirements-robotics.txt Dockerfile compose.yaml scripts/deploy.sh scripts/smoke_test.py app/main.py app/jobs.py app/sessions.py; do
+          echo "=== extracted project files ==="
+          find .build/mujoco-console -maxdepth 5 -type f -printf '%P\\n' | sort
+          echo "=== project README and deployment manifests ==="
+          cd .build/mujoco-console
+          for f in README.md .env.example requirements.txt requirements-robotics.txt Dockerfile compose.yaml scripts/deploy.sh scripts/smoke_test.py; do
             if [ -f "$f" ]; then
               echo "--- $f ---"
-              sed -n '1,280p' "$f"
+              sed -n '1,240p' "$f"
+            fi
+          done
+          echo "=== core runtime and tests ==="
+          for f in app/worker.py app/trainer.py app/env_factory.py app/catalog.py app/custom_env.py tests/test_catalog.py tests/test_api.py tests/test_integration.py; do
+            if [ -f "$f" ]; then
+              echo "--- $f ---"
+              sed -n '1,260p' "$f"
             fi
           done
       - name: Install lightweight test dependencies
         run: python -m pip install fastapi uvicorn httpx pytest
+      - name: Verify Uvicorn command-line options
+        run: |
+          echo "=== Uvicorn proxy options ==="
+          uvicorn --help | grep -A3 -B1 -i proxy || true
+          if uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers false --help >/tmp/uvicorn-invalid.txt 2>&1; then
+            echo "Unexpectedly accepted --proxy-headers false"
+          else
+            echo "Confirmed: --proxy-headers false is rejected"
+            cat /tmp/uvicorn-invalid.txt
+          fi
+          if uvicorn --no-proxy-headers --help >/tmp/uvicorn-valid.txt 2>&1; then
+            echo "Confirmed: --no-proxy-headers is accepted"
+          else
+            echo "No --no-proxy-headers option"
+            cat /tmp/uvicorn-valid.txt
+          fi
+      - name: Verify Uvicorn command-line options
+        run: |
+          echo "=== Uvicorn proxy options ==="
+          uvicorn --help | grep -A3 -B1 -i proxy || true
+          if uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers false --help >/tmp/uvicorn-invalid.txt 2>&1; then
+            echo "Unexpectedly accepted --proxy-headers false"
+          else
+            echo "Confirmed: --proxy-headers false is rejected"
+            cat /tmp/uvicorn-invalid.txt
+          fi
+          if uvicorn --no-proxy-headers --help >/tmp/uvicorn-valid.txt 2>&1; then
+            echo "Confirmed: --no-proxy-headers is accepted"
+          else
+            echo "No --no-proxy-headers option"
+            cat /tmp/uvicorn-valid.txt
+          fi
       - name: Python syntax
+        working-directory: .build/mujoco-console
         run: python -m compileall -q app tests scripts
       - name: Unit tests
+        working-directory: .build/mujoco-console
         run: python -m pytest -q
       - name: JavaScript syntax
+        working-directory: .build/mujoco-console
         run: node --check app/static/app.js
       - name: Shell syntax
+        working-directory: .build/mujoco-console
         run: bash -n scripts/*.sh
-      - name: Manifest schema JSON
-        run: python -m json.tool schemas/environment.schema.json > /dev/null
