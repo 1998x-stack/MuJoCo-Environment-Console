@@ -10,22 +10,24 @@
 - [源码分片目录](release/source-parts/)
 - [源码重组脚本](scripts/assemble-source.sh)
 
-先克隆并重组源码包：
+先克隆并重组源码包，再解压到独立目录：
 
 ```bash
 git clone https://github.com/1998x-stack/MuJoCo-Environment-Console.git
 cd MuJoCo-Environment-Console
 bash scripts/assemble-source.sh
-tar -xJf release/mujoco-console-source.tar.xz --exclude=.github
+mkdir -p mujoco-console
+tar -xJf release/mujoco-console-source.tar.xz -C mujoco-console
+cd mujoco-console
 ```
 
-解压会将项目文件放入仓库根目录。归档 SHA-256：
+将源码解压到独立目录，避免覆盖仓库根目录的 README、GitHub Actions 工作流和源码分片。归档 SHA-256：
 
 `2721a58736c66bc79bdce5384c217d6afd7ef46fcd3bf445899f5f7475964fed`
 
 ## Ubuntu 部署
 
-部署要求 Ubuntu 22.04/24.04、Docker Engine 和 Docker Compose v2。首次构建需要联网下载 Ubuntu 软件包、Python 依赖和 CPU 版 PyTorch。
+在上面的命令完成后，当前目录应为 `mujoco-console/`。部署要求 Ubuntu 22.04/24.04、Docker Engine 和 Docker Compose v2。首次构建需要联网下载 Ubuntu 软件包、Python 依赖和 CPU 版 PyTorch。
 
 ```bash
 bash scripts/deploy.sh
