@@ -4,10 +4,10 @@
 
 ## 获取源码
 
-完整可运行源码包（含 FastAPI 服务、Web UI、环境注册器、训练/仿真 worker、Docker 部署、测试和文档）：
+完整源码归档包含 FastAPI 服务、Web UI、环境注册器、训练/仿真 worker、Docker 部署配置、测试、环境 Manifest Schema 和环境扩展说明：
 
 - [源码归档](release/mujoco-console-source.tar.xz)
-- SHA-256：`791f00813a1ade9ffa04e27b61937bb00aac9931c3ebe8390edcac9525801c8d`
+- SHA-256：`2721a58736c66bc79bdce5384c217d6afd7ef46fcd3bf445899f5f7475964fed`
 
 解压后会得到 `mujoco-console/` 目录：
 
@@ -60,4 +60,4 @@ docker compose exec console python scripts/smoke_test.py --render
 
 不要将 HTTP 登录服务直接暴露到公网。需要远程访问时使用 VPN 或正确配置 HTTPS 反向代理。
 
-详细说明位于源码包中的 `README.md`、`docs/`、`envs/README.md` 和 `AGENTS.md`。
+环境扩展契约和 Manifest Schema 随源码归档提供。
