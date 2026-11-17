@@ -16,7 +16,8 @@ fi
 append_env_if_missing() {
   local key="$1"
   local value="$2"
-  if ! grep -q "^${key}=" .env; then
+  if ! grep -qE "^${key}=.+" .env; then
+    sed -i "/^${key}=/d" .env
     printf '%s=%s\n' "$key" "$value" >> .env
   fi
 }
