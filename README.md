@@ -16,7 +16,7 @@
 git clone https://github.com/1998x-stack/MuJoCo-Environment-Console.git
 cd MuJoCo-Environment-Console
 bash scripts/assemble-source.sh
-tar -xJf release/mujoco-console-source.tar.xz
+tar -xJf release/mujoco-console-source.tar.xz --exclude=.github
 ```
 
 解压会将项目文件放入仓库根目录。归档 SHA-256：
