@@ -22,7 +22,8 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir torch==2.9.0 --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt
 ARG INSTALL_ROBOTICS=1
-RUN if [ "$INSTALL_ROBOTICS" = "1" ]; then pip install --no-cache-dir -r requirements-robotics.txt; fi
+RUN if [ "$INSTALL_ROBOTICS" = "1" ]; then pip install --no-cache-dir -r requirements-robotics.txt; fi \
+    && pip check
 COPY app ./app
 COPY envs ./envs
 COPY scripts ./scripts
