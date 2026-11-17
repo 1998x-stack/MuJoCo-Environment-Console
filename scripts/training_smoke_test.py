@@ -1,63 +1,91 @@
-"""Short PPO/SAC train-and-replay smoke test for a fully provisioned container."""
+"""End-to-end PPO/SAC job, checkpoint, and isolated viewer-policy smoke test."""
 from __future__ import annotations
 
 import json
-from pathlib import Path
+import os
 import tempfile
+import time
+
+# Keep the smoke test isolated from the user's persistent training history.
+_smoke_data = tempfile.TemporaryDirectory(prefix='mujoco-training-smoke-')
+os.environ['CONSOLE_DATA_ROOT'] = _smoke_data.name
+os.environ.setdefault('OMP_NUM_THREADS', '1')
+os.environ.setdefault('MKL_NUM_THREADS', '1')
+os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
 
 from app.catalog import get_env
-from app.env_factory import make_environment
-from app.jobs import read_json, write_json
-from app.trainer import train
+from app.jobs import JobManager, fingerprint
+from app.sessions import ViewerSession
 
 
-def run_algorithm(algorithm: str, descriptor: dict) -> dict:
-    with tempfile.TemporaryDirectory(prefix=f'mujoco-{algorithm.lower()}-') as tmp:
-        folder = Path(tmp)
-        write_json(folder / 'environment.json', descriptor)
-        write_json(folder / 'status.json', {
-            'id': folder.name,
-            'env_id': descriptor['id'],
-            'algorithm': algorithm,
-            'timesteps': 1000,
-            'completed_steps': 0,
-            'status': 'starting',
-            'fingerprint': 'smoke-test',
-            'average_reward': None,
-        })
-        train(folder)
-        status = read_json(folder / 'status.json')
-        model_path = folder / 'model.zip'
-        assert status['status'] == 'completed', status
-        assert model_path.is_file(), f'{algorithm} did not save model.zip'
-
-        from stable_baselines3 import PPO, SAC
-        model_class = {'PPO': PPO, 'SAC': SAC}[algorithm]
-        model = model_class.load(str(model_path), device='cpu')
-        env = make_environment(descriptor)
+def run_algorithm(manager: JobManager, algorithm: str, descriptor: dict) -> dict:
+    info = manager.start(descriptor, algorithm, 1000)
+    run_id = info['id']
+    deadline = time.monotonic() + 240
+    while time.monotonic() < deadline:
+        status = manager.get(run_id)
+        if status.get('status') in ('completed', 'failed', 'cancelled', 'interrupted'):
+            break
+        time.sleep(0.25)
+    else:
         try:
-            obs, _ = env.reset(seed=7)
-            action, _ = model.predict(obs, deterministic=True)
-            obs, reward, terminated, truncated, info = env.step(action)
-            assert obs is not None
-            assert isinstance(float(reward), float)
+            manager.cancel(run_id)
         finally:
-            env.close()
-        return {
+            raise TimeoutError(f'{algorithm} training exceeded 240 seconds')
+
+    proc = manager.processes.get(run_id)
+    if proc is not None:
+        proc.wait(timeout=10)
+    status = manager.get(run_id)
+    assert status['status'] == 'completed', status
+
+    folder, _ = manager.model(run_id, descriptor['id'], fingerprint(descriptor))
+    viewer = ViewerSession(descriptor, fps=8, width=320, height=240)
+    try:
+        viewer.command({
+            'op': 'policy',
+            'run_dir': str(folder),
             'algorithm': algorithm,
-            'status': status['status'],
-            'completed_steps': status['completed_steps'],
-            'eval_returns': status.get('eval_returns', []),
-            'replay_step': 'passed',
-        }
+        })
+        seq = 0
+        replay_deadline = time.monotonic() + 30
+        while time.monotonic() < replay_deadline:
+            seq, jpeg = viewer.wait_frame(seq, timeout=2)
+            state = viewer.status()
+            if state.get('state') == 'error':
+                raise RuntimeError(f'{algorithm} viewer failed: {state.get("error")}')
+            if state.get('mode') == 'policy' and state.get('steps', 0) > 0 and jpeg:
+                break
+        else:
+            raise TimeoutError(f'{algorithm} policy viewer did not produce a frame')
+    finally:
+        viewer.close()
+
+    return {
+        'algorithm': algorithm,
+        'status': status['status'],
+        'requested_steps': status['timesteps'],
+        'actual_steps': status['completed_steps'],
+        'eval_returns': status.get('eval_returns', []),
+        'checkpoint': 'saved and validated',
+        'isolated_policy_viewer': 'passed',
+    }
 
 
 def main():
     import torch
     torch.set_num_threads(1)
     descriptor = get_env('gym:InvertedPendulum-v5')
-    results = [run_algorithm(algorithm, descriptor) for algorithm in ('PPO', 'SAC')]
-    print(json.dumps(results, indent=2, ensure_ascii=False))
+    manager = JobManager()
+    try:
+        results = [
+            run_algorithm(manager, algorithm, descriptor)
+            for algorithm in ('PPO', 'SAC')
+        ]
+        print(json.dumps(results, indent=2, ensure_ascii=False))
+    finally:
+        manager.stop_all()
+        _smoke_data.cleanup()
 
 
 if __name__ == '__main__':
