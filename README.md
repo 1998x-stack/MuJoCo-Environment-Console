@@ -4,9 +4,13 @@
 
 ## 获取源码
 
-完整源码归档包含 FastAPI 服务、Web UI、环境注册器、训练/仿真 worker、Docker 部署配置、测试、环境 Manifest Schema 和环境扩展说明。
+完整源码包包含 FastAPI 服务、Web UI、环境注册器、训练/仿真 worker、Docker 部署配置、测试、环境 Manifest Schema 和环境扩展说明。
 
-仓库采用压缩源码分片存储。先重组并校验源码包：
+仓库为控制二进制体积采用压缩源码分片存储：
+- [源码分片目录](release/source-parts/)
+- [源码重组脚本](scripts/assemble-source.sh)
+
+先克隆并重组源码包：
 
 ```bash
 git clone https://github.com/1998x-stack/MuJoCo-Environment-Console.git
@@ -59,7 +63,7 @@ bash scripts/deploy.sh
 - Shell syntax check
 - JSON schema parse
 
-尚未在真实 Ubuntu Docker 主机完成物理仿真、离屏渲染和 PPO/SAC 端到端实测。部署后请执行：
+仓库 CI 会重组归档并执行静态检查与单元测试。尚未在真实 Ubuntu Docker 主机完成物理仿真、离屏渲染和 PPO/SAC 端到端实测。部署后请执行：
 
 ```bash
 docker compose exec console python scripts/smoke_test.py --render
