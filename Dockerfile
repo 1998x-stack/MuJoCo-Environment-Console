@@ -12,7 +12,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-venv python3-pip ca-certificates curl \
       libosmesa6 libgl1 libegl1 libglfw3 libglew2.2 libglib2.0-0 \
-      libx11-6 libxext6 libxrender1 libsm6 git \
+      libx11-6 libxext6 libxrender1 libsm6 \
     && rm -rf /var/lib/apt/lists/*
 RUN python3 -m venv /opt/venv
 WORKDIR /app
