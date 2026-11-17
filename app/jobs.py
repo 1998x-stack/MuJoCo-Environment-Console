@@ -1,5 +1,6 @@
-"""Persistent local training run metadata; never load external model uploads."""
+"""Persistent training runs with explicit process-group lifecycle management."""
 from __future__ import annotations
+
 import hashlib
 import json
 import os
@@ -8,18 +9,36 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 
 DATA_ROOT = Path(os.getenv('CONSOLE_DATA_ROOT', './data')).resolve()
 RUNS = DATA_ROOT / 'runs'
+ACTIVE = ('starting', 'running')
+
+
+def _now():
+    return datetime.now(timezone.utc).isoformat()
+
 
 def fingerprint(descriptor):
     stable = {k: v for k, v in descriptor.items() if k not in ('installed',)}
     digest = hashlib.sha256(json.dumps(stable, sort_keys=True, ensure_ascii=False).encode())
     if descriptor.get('kind') == 'mjcf':
-        digest.update(Path(descriptor['xml_path']).read_bytes())
+        xml_path = Path(descriptor['xml_path']).resolve()
+        root = xml_path.parent
+        # Include meshes, textures and included XML files, not only the entry-point XML.
+        for asset in sorted(root.rglob('*')):
+            if not asset.is_file() or asset.is_symlink():
+                continue
+            resolved = asset.resolve()
+            if not resolved.is_relative_to(root):
+                continue
+            digest.update(asset.relative_to(root).as_posix().encode('utf8'))
+            digest.update(asset.read_bytes())
     return digest.hexdigest()
+
 
 def write_json(path, obj):
     target = Path(path)
@@ -28,32 +47,82 @@ def write_json(path, obj):
     tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf8')
     os.replace(tmp, target)
 
+
 def read_json(path):
     return json.loads(Path(path).read_text(encoding='utf8'))
+
+
+def terminate_process_group(pgid, grace_seconds=4):
+    """Terminate the detached trainer process group, escalating if it ignores SIGTERM."""
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    deadline = time.monotonic() + grace_seconds
+    while time.monotonic() < deadline:
+        try:
+            os.killpg(pgid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.1)
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
 
 class JobManager:
     def __init__(self):
         self.processes = {}
         self.lock = threading.RLock()
+        self._closing = False
         RUNS.mkdir(parents=True, exist_ok=True)
-        # In-flight processes are container-scoped; restarting the server interrupts them.
+        # Recover interrupted runs and terminate a detached trainer left behind by
+        # an in-container server restart. Verify its command line before signaling.
         for meta in RUNS.glob('*/status.json'):
             try:
                 data = read_json(meta)
-                if data.get('status') in ('starting', 'running'):
-                    data['status'] = 'interrupted'
+                if data.get('status') in ACTIVE:
+                    pid = data.get('pid')
+                    if isinstance(pid, int) and pid > 1:
+                        try:
+                            cmdline = Path(f'/proc/{pid}/cmdline').read_bytes().replace(b'\\0', b' ').decode('utf8', 'replace')
+                            run_dir = str(meta.parent.resolve())
+                            if 'app.trainer' in cmdline and run_dir in cmdline:
+                                terminate_process_group(pid, grace_seconds=2)
+                        except (OSError, ProcessLookupError):
+                            pass
+                    data.update({'status': 'interrupted', 'finished': _now(),
+                                 'error': 'Server restarted while training was active'})
                     write_json(meta, data)
             except (OSError, ValueError):
                 continue
 
+    def _reconcile_finished(self, run_id, proc):
+        code = proc.poll()
+        if code is None:
+            return
+        try:
+            info = self.get(run_id)
+            if info.get('status') in ACTIVE:
+                info.update({'status': 'failed',
+                             'error': f'Trainer exited unexpectedly (exit code {code})',
+                             'finished': _now()})
+                write_json(RUNS / run_id / 'status.json', info)
+        except (KeyError, OSError, ValueError):
+            pass
+        self.processes.pop(run_id, None)
+
     def list(self):
-        result = []
-        for status in RUNS.glob('*/status.json'):
-            try:
-                item = read_json(status)
-                result.append(item)
-            except (OSError, ValueError):
-                pass
+        with self.lock:
+            for run_id, proc in list(self.processes.items()):
+                self._reconcile_finished(run_id, proc)
+            result = []
+            for status in RUNS.glob('*/status.json'):
+                try:
+                    result.append(read_json(status))
+                except (OSError, ValueError):
+                    pass
         return sorted(result, key=lambda x: x.get('created', ''), reverse=True)[:100]
 
     def get(self, run_id):
@@ -72,9 +141,10 @@ class JobManager:
         if not descriptor['installed']:
             raise ValueError('Environment is not installed')
         with self.lock:
-            for rid, proc in list(self.processes.items()):
-                if proc.poll() is not None:
-                    self.processes.pop(rid)
+            if self._closing:
+                raise ValueError('Server is shutting down')
+            for run_id, proc in list(self.processes.items()):
+                self._reconcile_finished(run_id, proc)
             if self.processes:
                 raise ValueError('One training job at a time in the CPU-first edition')
             run_id = uuid.uuid4().hex
@@ -82,7 +152,7 @@ class JobManager:
             folder.mkdir()
             info = {'id': run_id, 'env_id': descriptor['id'], 'algorithm': algorithm,
                     'timesteps': timesteps, 'completed_steps': 0, 'status': 'starting',
-                    'created': datetime.now(timezone.utc).isoformat(), 'fingerprint': fingerprint(descriptor),
+                    'created': _now(), 'fingerprint': fingerprint(descriptor),
                     'average_reward': None}
             write_json(folder / 'status.json', info)
             write_json(folder / 'environment.json', descriptor)
@@ -93,28 +163,67 @@ class JobManager:
                     cwd=str(Path(__file__).resolve().parent.parent),
                     stdout=logfile, stderr=subprocess.STDOUT, start_new_session=True,
                     env=os.environ.copy())
-            except Exception:
-                info['status'] = 'failed'
+            except Exception as exc:
+                info.update({'status': 'failed', 'error': str(exc), 'finished': _now()})
                 write_json(folder / 'status.json', info)
                 raise
             finally:
                 logfile.close()
+            info['pid'] = proc.pid
+            write_json(folder / 'status.json', info)
             self.processes[run_id] = proc
             return info
 
     def cancel(self, run_id):
         with self.lock:
-            proc = self.processes.get(run_id)
             info = self.get(run_id)
-            if info['status'] not in ('starting', 'running'):
+            if info.get('status') not in ACTIVE:
                 raise ValueError('Run is not active')
-            if proc is None or proc.poll() is not None:
+            proc = self.processes.get(run_id)
+            if proc is None:
                 raise ValueError('Run is not managed by this server')
-            os.killpg(proc.pid, signal.SIGTERM)
-            info['status'] = 'cancelled'
-            write_json(RUNS / run_id / 'status.json', info)
+            if proc.poll() is not None:
+                self._reconcile_finished(run_id, proc)
+                raise ValueError('Run is no longer active')
+            terminate_process_group(proc.pid, grace_seconds=4)
+            try:
+                proc.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                terminate_process_group(proc.pid, grace_seconds=0)
+                proc.wait(timeout=1)
+            info = self.get(run_id)
+            if info.get('status') in ACTIVE:
+                info.update({'status': 'cancelled', 'finished': _now()})
+                write_json(RUNS / run_id / 'status.json', info)
             self.processes.pop(run_id, None)
             return info
+
+    def stop_all(self):
+        """Stop all detached trainer groups before the API process exits."""
+        with self.lock:
+            self._closing = True
+            items = list(self.processes.items())
+        for run_id, proc in items:
+            if proc.poll() is None:
+                terminate_process_group(proc.pid, grace_seconds=4)
+                try:
+                    proc.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    terminate_process_group(proc.pid, grace_seconds=0)
+                    try:
+                        proc.wait(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        pass
+            try:
+                info = self.get(run_id)
+                if info.get('status') in ACTIVE:
+                    info.update({'status': 'interrupted', 'finished': _now(),
+                                 'error': 'Server is shutting down'})
+                    write_json(RUNS / run_id / 'status.json', info)
+            except (KeyError, OSError, ValueError):
+                pass
+        with self.lock:
+            self.processes.clear()
 
     def model(self, run_id, env_id, current_fingerprint):
         run = self.get(run_id)
