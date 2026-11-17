@@ -1,4 +1,4 @@
-mujoco==4.0.1
+mujoco==3.3.7
 gymnasium[mujoco]==1.4.0
 stable-baselines3==2.9.2
 fastapi>=0.115,<1.0
