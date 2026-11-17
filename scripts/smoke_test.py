@@ -27,7 +27,7 @@ for desc in discover():
             assert frame is not None and len(frame.shape) == 3
         report.append({'id': desc['id'], 'ok': True})
     except Exception as e:
-        report.append({'id': desc['id'], 'ok': False, 'error': str(e)})
+        report.append({'id': desc['id'], 'ok': False, 'error': f'{type(e).__name__}: {e}'})
         traceback.print_exc()
     finally:
         if env is not None:
