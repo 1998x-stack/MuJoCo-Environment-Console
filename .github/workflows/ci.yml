@@ -1,0 +1,40 @@
+name: Verify MuJoCo Console source bundle
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Assemble and verify source archive
+        run: |
+          bash scripts/assemble-source.sh
+          tar -xJf release/mujoco-console-source.tar.xz
+      - name: Install lightweight test dependencies
+        run: python -m pip install fastapi uvicorn httpx pytest
+      - name: Python syntax
+        working-directory: mujoco-console
+        run: python -m compileall -q app tests scripts
+      - name: Unit tests
+        working-directory: mujoco-console
+        run: python -m pytest -q
+      - name: JavaScript syntax
+        working-directory: mujoco-console
+        run: node --check app/static/app.js
+      - name: Shell syntax
+        working-directory: mujoco-console
+        run: bash -n scripts/*.sh
+      - name: Manifest schema JSON
+        working-directory: mujoco-console
+        run: python -m json.tool schemas/environment.schema.json > /dev/null
