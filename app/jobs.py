@@ -86,7 +86,7 @@ class JobManager:
                     pid = data.get('pid')
                     if isinstance(pid, int) and pid > 1:
                         try:
-                            cmdline = Path(f'/proc/{pid}/cmdline').read_bytes().replace(b'\\0', b' ').decode('utf8', 'replace')
+                            cmdline = Path(f'/proc/{pid}/cmdline').read_bytes().replace(b'\0', b' ').decode('utf8', 'replace')
                             run_dir = str(meta.parent.resolve())
                             if 'app.trainer' in cmdline and run_dir in cmdline:
                                 terminate_process_group(pid, grace_seconds=2)
