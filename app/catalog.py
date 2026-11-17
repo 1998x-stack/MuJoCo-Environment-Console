@@ -29,8 +29,20 @@ FETCH = [
     ('FetchPickAndPlace-v4', '机械臂抓取放置'),
 ]
 
+def _module_available(name):
+    if not name:
+        return True
+    try:
+        return importlib.util.find_spec(name) is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
+        return False
+
+
 def _entry(key, name, category, library, gym_id=None, module=None, **other):
-    installed = module is None or importlib.util.find_spec(module) is not None
+    if gym_id:
+        installed = _module_available('gymnasium') and _module_available(module)
+    else:
+        installed = _module_available('gymnasium') and _module_available('mujoco')
     return {'id': key, 'name': name, 'category': category, 'library': library,
             'kind': 'gym' if gym_id else 'mjcf', 'gym_id': gym_id,
             'registration_module': module, 'installed': installed, **other}
