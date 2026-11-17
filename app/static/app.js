@@ -5,7 +5,19 @@ const esc = (v)=>String(v??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;'
 let toastTimer;
 function toast(message){const el=$('#toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),4000);}
 async function api(path,method='GET',data){const r=await fetch(path,{method,credentials:'same-origin',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined});let payload={};try{payload=await r.json();}catch{}if(!r.ok){if(r.status===401 && path!=='/api/login'){showLogin();}throw Error(typeof payload.detail==='string'?payload.detail:(JSON.stringify(payload.detail)||r.statusText));}return payload;}
-function showLogin(){$('#loginCover').hidden=false;$('#application').hidden=true;clearInterval(state.timer);state.timer=null;}
+function showLogin(){
+  if(state.session){
+    navigator.sendBeacon(`/api/sessions/${state.session.id}/stop`,new Blob());
+    state.session=null;
+  }
+  $('#stream').src='';
+  $('#stream').style.display='none';
+  $('#placeholder').style.display='flex';
+  $('#loginCover').hidden=false;
+  $('#application').hidden=true;
+  clearInterval(state.timer);
+  state.timer=null;
+}
 function showApp(){$('#loginCover').hidden=true;$('#application').hidden=false;}
 function iconFor(e){if(e.id.startsWith('fetch:'))return '🦾';if(e.id.startsWith('custom:'))return '⚙';return ({'Locomotion':'◈','Control':'◉','Manipulation':'◎','Humanoid':'♙'})[e.category]||'⌘';}
 function renderCategoryTabs(){const categories=[...new Set(state.envs.map(e=>e.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'zh-CN'));const label=(c)=>({'Locomotion':'运动','Control':'控制','Manipulation':'机械臂','Humanoid':'人形','Fetch Robotics':'Fetch 机器人','Custom Control':'自定义','Custom':'自定义'})[c]||c;$('#categoryTabs').innerHTML=[['all','全部'],...categories.map(c=>[c,label(c)])].map(([key,name])=>`<button data-filter="${esc(key)}" class="${state.filter===key?'active':''}">${esc(name)}</button>`).join('');}
