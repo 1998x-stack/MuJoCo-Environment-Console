@@ -21,15 +21,17 @@ jobs:
         run: |
           bash scripts/assemble-source.sh
           tar -xJf release/mujoco-console-source.tar.xz --exclude=.github
-      - name: Inventory extracted source
+      - name: Inspect source archive and deployment files
         run: |
-          echo "=== extracted source tree ==="
+          echo "=== archive entries ==="
+          tar -tf release/mujoco-console-source.tar.xz | sed -n '1,160p'
+          echo "=== extracted file tree ==="
           find . -maxdepth 5 -type f ! -path './.git/*' ! -path './release/mujoco-console-source.tar.xz' -printf '%P\\n' | sort
-          echo "=== deployment manifests ==="
-          for f in Dockerfile docker-compose.yml docker-compose.yaml compose.yml compose.yaml pyproject.toml requirements.txt .dockerignore scripts/deploy.sh scripts/smoke_test.py; do
+          echo "=== deployment manifests and runtime configuration ==="
+          for f in .env.example requirements-robotics.txt Dockerfile compose.yaml scripts/deploy.sh scripts/smoke_test.py app/main.py app/jobs.py app/sessions.py; do
             if [ -f "$f" ]; then
               echo "--- $f ---"
-              sed -n '1,240p' "$f"
+              sed -n '1,280p' "$f"
             fi
           done
       - name: Install lightweight test dependencies
