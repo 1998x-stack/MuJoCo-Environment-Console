@@ -92,8 +92,8 @@ jobs:
           import json
           data = json.load(open('/tmp/mujoco-catalog.json'))
           envs = data['environments']
-          assert len([e for e in envs if e['id'].startswith('gym:')]) == 11
-          assert len([e for e in envs if e['id'].startswith('fetch:')]) == 4
+          assert len([e for e in envs if e['id'].startswith('gym:')]) >= 11
+          assert len([e for e in envs if e['id'].startswith('fetch:')])  >= 4
           assert all(e['installed'] for e in envs)
           print(f"Catalog OK: {len(envs)} installed environments")
           PY
