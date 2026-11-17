@@ -39,10 +39,14 @@ async def lifespan(_app):
     try:
         yield
     finally:
-        jobs.stop_all()
-        manager.stop_all()
-        with AUTH_LOCK:
-            AUTH.clear()
+        try:
+            jobs.stop_all()
+        finally:
+            try:
+                manager.stop_all()
+            finally:
+                with AUTH_LOCK:
+                    AUTH.clear()
 
 
 app = FastAPI(title='MuJoCo Environment Console', docs_url=None, redoc_url=None, lifespan=lifespan)
