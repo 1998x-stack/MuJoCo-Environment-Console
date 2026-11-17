@@ -39,3 +39,19 @@ def test_fingerprint_changes_on_xml(tmp_path):
     a = fingerprint(descr)
     xml.write_text('<mujoco model="changed"/>')
     assert fingerprint(descr) != a
+
+
+def test_missing_dotted_registration_module_is_unavailable(monkeypatch):
+    import app.catalog as catalog
+
+    def fake_find_spec(name):
+        if name == 'gymnasium':
+            return object()
+        raise ModuleNotFoundError(name)
+
+    monkeypatch.setattr(catalog.importlib.util, 'find_spec', fake_find_spec)
+    entry = catalog._entry(
+        'custom:missing', 'Missing plugin', 'Custom', 'External Gymnasium',
+        'Missing-v0', 'missing.parent',
+    )
+    assert entry['installed'] is False
