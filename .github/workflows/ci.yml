@@ -1,7 +1,4 @@
-name: Verify MuJoCo Console source bundle
-
-permissions:
-  contents: write
+name: CI
 
 on:
   push:
@@ -9,103 +6,128 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
-  validate:
+  validate-and-smoke:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Assemble and verify source archive
-        run: |
-          bash scripts/assemble-source.sh
-          mkdir -p .build/mujoco-console
-          tar -xJf release/mujoco-console-source.tar.xz -C .build/mujoco-console
-          # Fix the Uvicorn flag syntax in the extracted project before validation.
-          sed -i 's/"--proxy-headers", "false"/"--no-proxy-headers"/' .build/mujoco-console/Dockerfile
-      - name: Inspect source archive and deployment files
-        run: |
-          echo "=== extracted project files ==="
-          find .build/mujoco-console -maxdepth 5 -type f -printf '%P\\n' | sort
-          echo "=== project README and deployment manifests ==="
-          cd .build/mujoco-console
-          for f in README.md .env.example requirements.txt requirements-robotics.txt Dockerfile compose.yaml scripts/deploy.sh scripts/smoke_test.py; do
-            if [ -f "$f" ]; then
-              echo "--- $f ---"
-              sed -n '1,240p' "$f"
-            fi
-          done
-          echo "=== core runtime and tests ==="
-          for f in app/worker.py app/trainer.py app/env_factory.py app/catalog.py app/custom_env.py tests/test_catalog.py tests/test_api.py tests/test_integration.py; do
-            if [ -f "$f" ]; then
-              echo "--- $f ---"
-              sed -n '1,260p' "$f"
-            fi
-          done
+
       - name: Install lightweight test dependencies
         run: python -m pip install fastapi uvicorn httpx pytest
-      - name: Verify Uvicorn launch option
+
+      - name: Python syntax
+        run: python -m compileall -q app tests scripts
+
+      - name: Unit tests
+        run: python -m pytest -q
+
+      - name: JavaScript syntax
+        run: node --check app/static/app.js
+
+      - name: Shell syntax
+        run: bash -n scripts/*.sh
+
+      - name: Manifest schema JSON
+        run: python -m json.tool schemas/environment.schema.json > /dev/null
+
+      - name: Prepare isolated container deployment
         run: |
-          grep -q '"--no-proxy-headers"' .build/mujoco-console/Dockerfile
-          ! grep -q '"--proxy-headers", "false"' .build/mujoco-console/Dockerfile
-          cat >/tmp/asgi_probe.py <<'PY'
-          async def app(scope, receive, send):
-              if scope["type"] == "http":
-                  await send({"type": "http.response.start", "status": 200, "headers": []})
-                  await send({"type": "http.response.body", "body": b"ok"})
-          PY
-          set +e
-          timeout 3s env PYTHONPATH=/tmp uvicorn asgi_probe:app --host 127.0.0.1 --port 0 --workers 1 --no-proxy-headers >/tmp/uvicorn-probe.txt 2>&1
-          rc=$?
-          set -e
-          if [ "$rc" -ne 124 ]; then
-            echo "Uvicorn failed to start with --no-proxy-headers (exit=$rc)"
-            cat /tmp/uvicorn-probe.txt
+          mkdir -p data/runs
+          cat > .env <<EOF
+          MUJOCO_CONSOLE_PASSWORD=ci-test-secret
+          CONSOLE_PORT=18000
+          MAX_VIEWERS=2
+          INSTALL_ROBOTICS=1
+          COOKIE_SECURE=0
+          LOGIN_MAX_ATTEMPTS=8
+          LOGIN_WINDOW_SECONDS=300
+          SESSION_IDLE_SECONDS=60
+          CONSOLE_UID=$(id -u)
+          CONSOLE_GID=$(id -g)
+          EOF
+          chmod 600 .env
+          docker compose config --quiet
+
+      - name: Build production image
+        run: docker compose build --progress=plain
+
+      - name: Start and wait for health
+        run: |
+          docker compose up -d
+          health=''
+          for _ in {1..60}; do
+            health="$(docker inspect --format '{{.State.Health.Status}}' mujoco-console 2>/dev/null || true)"
+            if [[ "$health" == 'healthy' ]]; then break; fi
+            if [[ "$health" == 'unhealthy' ]]; then break; fi
+            sleep 2
+          done
+          if [[ "$health" != 'healthy' ]]; then
+            docker compose logs --tail=150 console
+            echo "Container failed health check: $health" >&2
             exit 1
           fi
-      - name: Python syntax
-        working-directory: .build/mujoco-console
-        run: python -m compileall -q app tests scripts
-      - name: Unit tests
-        working-directory: .build/mujoco-console
-        run: python -m pytest -q
-      - name: JavaScript syntax
-        working-directory: .build/mujoco-console
-        run: node --check app/static/app.js
-      - name: Shell syntax
-        working-directory: .build/mujoco-console
-        run: bash -n scripts/*.sh
-      - name: Manifest schema JSON
-        working-directory: .build/mujoco-console
-        run: python -m json.tool schemas/environment.schema.json > /dev/null
-      - name: Publish unpacked application source
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+          curl -fsS http://127.0.0.1:18000/healthz
+
+      - name: Verify authenticated API and MJPEG viewer
         run: |
-          if [ -f app/main.py ]; then
-            echo "Application source already published"
-            exit 0
+          curl -fsS -c /tmp/mujoco-cookies \
+            -H 'Content-Type: application/json' \
+            -d '{"password":"ci-test-secret"}' \
+            http://127.0.0.1:18000/api/login
+          curl -fsS -b /tmp/mujoco-cookies \
+            http://127.0.0.1:18000/api/catalog > /tmp/mujoco-catalog.json
+          python - <<'PY'
+          import json
+          data = json.load(open('/tmp/mujoco-catalog.json'))
+          envs = data['environments']
+          assert len([e for e in envs if e['id'].startswith('gym:')]) == 11
+          assert len([e for e in envs if e['id'].startswith('fetch:')]) == 4
+          assert all(e['installed'] for e in envs)
+          print(f"Catalog OK: {len(envs)} installed environments")
+          PY
+          sid="$(curl -fsS -b /tmp/mujoco-cookies \
+            -H 'Content-Type: application/json' \
+            -d '{"env_id":"gym:InvertedPendulum-v5"}' \
+            http://127.0.0.1:18000/api/sessions | python -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+          set +e
+          curl --max-time 5 -sS -b /tmp/mujoco-cookies \
+            "http://127.0.0.1:18000/api/sessions/${sid}/stream" \
+            -o /tmp/mujoco-stream.bin
+          stream_rc=$?
+          set -e
+          if [[ "$stream_rc" -ne 0 && "$stream_rc" -ne 28 ]]; then
+            echo "MJPEG stream request failed: $stream_rc" >&2
+            exit "$stream_rc"
           fi
-          cp -a .build/mujoco-console/app .
-          cp -a .build/mujoco-console/envs .
-          cp -a .build/mujoco-console/tests .
-          cp -a .build/mujoco-console/schemas .
-          cp .build/mujoco-console/Dockerfile .
-          cp .build/mujoco-console/compose.yaml .
-          cp .build/mujoco-console/requirements.txt .
-          cp .build/mujoco-console/requirements-robotics.txt .
-          cp .build/mujoco-console/.env.example .
-          cp .build/mujoco-console/.dockerignore .
-          cp .build/mujoco-console/.gitignore .
-          cp .build/mujoco-console/pytest.ini .
-          install -D -m 755 .build/mujoco-console/scripts/deploy.sh scripts/deploy.sh
-          install -D -m 755 .build/mujoco-console/scripts/smoke_test.py scripts/smoke_test.py
-          install -D -m 755 .build/mujoco-console/scripts/import_menagerie.sh scripts/import_menagerie.sh
-          git add app envs tests schemas Dockerfile compose.yaml requirements.txt requirements-robotics.txt .env.example .dockerignore .gitignore pytest.ini scripts/deploy.sh scripts/smoke_test.py scripts/import_menagerie.sh
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "build: publish unpacked MuJoCo application source"
-          git push origin HEAD:main
+          test -s /tmp/mujoco-stream.bin
+          grep -a -q 'Content-Type: image/jpeg' /tmp/mujoco-stream.bin
+          curl -fsS -b /tmp/mujoco-cookies -X POST \
+            "http://127.0.0.1:18000/api/sessions/${sid}/stop"
+
+      - name: Verify physics, offscreen rendering, PPO and SAC
+        run: |
+          docker compose exec -T console python scripts/smoke_test.py --render --all
+          timeout 600 docker compose exec -T console python scripts/training_smoke_test.py
+
+      - name: Collect container logs on failure
+        if: failure()
+        run: docker compose logs --tail=200 console || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down --remove-orphans || true
+          rm -f .env
+          rm -rf data/runs
