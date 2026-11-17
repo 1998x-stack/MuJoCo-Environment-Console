@@ -59,22 +59,6 @@ jobs:
             echo "No --no-proxy-headers option"
             cat /tmp/uvicorn-valid.txt
           fi
-      - name: Verify Uvicorn command-line options
-        run: |
-          echo "=== Uvicorn proxy options ==="
-          uvicorn --help | grep -A3 -B1 -i proxy || true
-          if uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers false --help >/tmp/uvicorn-invalid.txt 2>&1; then
-            echo "Unexpectedly accepted --proxy-headers false"
-          else
-            echo "Confirmed: --proxy-headers false is rejected"
-            cat /tmp/uvicorn-invalid.txt
-          fi
-          if uvicorn --no-proxy-headers --help >/tmp/uvicorn-valid.txt 2>&1; then
-            echo "Confirmed: --no-proxy-headers is accepted"
-          else
-            echo "No --no-proxy-headers option"
-            cat /tmp/uvicorn-valid.txt
-          fi
       - name: Python syntax
         working-directory: .build/mujoco-console
         run: python -m compileall -q app tests scripts
@@ -87,3 +71,6 @@ jobs:
       - name: Shell syntax
         working-directory: .build/mujoco-console
         run: bash -n scripts/*.sh
+      - name: Manifest schema JSON
+        working-directory: .build/mujoco-console
+        run: python -m json.tool schemas/environment.schema.json > /dev/null
