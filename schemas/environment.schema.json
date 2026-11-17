@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/mujoco-console/environment.schema.json",
+  "title": "MuJoCo Console Environment Manifest",
+  "type": "object",
+  "required": ["kind", "name"],
+  "properties": {
+    "kind": {"enum": ["mjcf", "gym"]},
+    "name": {"type": "string", "minLength": 1, "maxLength": 80},
+    "category": {"type": "string"},
+    "xml": {"type": "string", "pattern": "\\.xml$"},
+    "gym_id": {"type": "string", "minLength": 1},
+    "registration_module": {"type": "string"},
+    "view_only": {"type": "boolean", "default": false},
+    "target_qpos": {"type": "array", "items": {"type": "number"}},
+    "init_qpos": {"type": "array", "items": {"type": "number"}},
+    "camera": {"oneOf": [{"type": "integer"}, {"type": "string"}]},
+    "frame_skip": {"type": "integer", "minimum": 1, "maximum": 100},
+    "max_episode_steps": {"type": "integer", "minimum": 1, "maximum": 100000}
+  },
+  "allOf": [
+    {"if": {"properties": {"kind": {"const": "mjcf"}}}, "then": {"required": ["xml"]}},
+    {"if": {"properties": {"kind": {"const": "gym"}}}, "then": {"required": ["gym_id"]}}
+  ],
+  "additionalProperties": true
+}

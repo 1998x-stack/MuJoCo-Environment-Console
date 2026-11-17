@@ -1,0 +1,11 @@
+{
+  "kind": "mjcf",
+  "name": "单关节摆 · 目标跟踪",
+  "category": "Custom Control",
+  "xml": "model.xml",
+  "target_qpos": [0.0],
+  "init_qpos": [1.1],
+  "camera": "overview",
+  "frame_skip": 5,
+  "max_episode_steps": 400
+}

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MuJoCo Console · Simulation Lab</title>
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="stylesheet" href="/app.css" />
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <div class="app-shell" id="application" hidden>
+    <header class="topbar">
+      <div class="brand"><div class="brand-icon">M<span>·</span></div><div><strong>MUJOCO CONSOLE</strong><small>PHYSICS & LEARNING LAB</small></div></div>
+      <div class="header-center"><span class="pulse-dot"></span> LOCAL SIMULATION SERVER <span class="header-divider">/</span> UBUNTU</div>
+      <div class="head-right"><span class="build-label" id="librarySummary">加载环境中...</span><button class="ghost small" id="refreshBtn" title="重新扫描环境">↻ 刷新</button><button class="ghost small" id="logoutBtn">退出</button></div>
+    </header>
+    <div class="workspace">
+      <aside class="catalog-panel">
+        <div class="panel-head"><div><span class="eyebrow">ENVIRONMENT LIBRARY</span><h1>环境资源库</h1></div><span class="counter" id="envCounter">0</span></div>
+        <label class="search-wrap"><span>⌕</span><input id="search" type="search" placeholder="搜索环境或类别..." autocomplete="off" /></label>
+        <div class="category-tabs" id="categoryTabs"><button data-filter="all" class="active">全部</button><button data-filter="Locomotion">运动</button><button data-filter="Control">控制</button><button data-filter="Manipulation">机械臂</button><button data-filter="Custom">扩展</button></div>
+        <div id="envList" class="env-list"></div>
+        <div class="catalog-note"><span class="note-icon">+</span><div><strong>可扩展环境</strong><small>在服务器 envs/ 目录放入 XML 和 manifest.json，刷新后即可发现。</small></div></div>
+      </aside>
+      <main class="sim-panel">
+        <div class="sim-title"><div><span class="eyebrow">LIVE SIMULATION</span><h2 id="selectedTitle">选择一个环境开始</h2><p id="selectedSub">点击左侧环境，启动本地 MuJoCo 仿真实例</p></div><div class="live-indicator" id="liveIndicator"><span></span> OFFLINE</div></div>
+        <div class="viewport" id="viewport"><div class="viewport-grid"></div><img id="stream" alt="MuJoCo 仿真实时画面" /><div class="viewport-placeholder" id="placeholder"><div class="placeholder-mark">M<span>·</span></div><strong>Ready for Simulation</strong><small>环境将在 Ubuntu 服务器上执行，画面在局域网内传输</small></div><div class="viewport-top"><span class="viewport-chip">◉ RGB STREAM / HTTP</span><span class="viewport-chip" id="viewResolution">640 × 480</span></div><div class="viewport-bottom"><span>PHYSICS ENGINE: MUJOCO</span><span>SERVER RENDERED · 12 FPS TARGET</span></div></div>
+        <div class="control-strip"><div class="control-label">DRIVER MODE</div><div class="seg-controls"><button id="randomBtn" class="active">⚄ 随机驱动</button><button id="policyBtn">◈ 策略模型</button></div><div class="control-right"><button class="ghost" id="resetBtn" disabled>↺ 重置</button><button class="ghost" id="pauseBtn" disabled>Ⅱ 暂停</button></div></div>
+        <div class="metrics"><div class="metric"><small>SIMULATION STATE</small><strong id="mStatus">IDLE</strong></div><div class="metric"><small>TOTAL STEPS</small><strong id="mSteps">0</strong></div><div class="metric"><small>EPISODES</small><strong id="mEpisodes">0</strong></div><div class="metric"><small>LAST REWARD</small><strong id="mReward">0.0000</strong></div></div>
+        <section class="info-section"><div class="section-label"><span>01</span> ENVIRONMENT DETAILS</div><div class="details-grid"><div><small>ENVIRONMENT ID</small><b id="envId">—</b></div><div><small>SOURCE LIBRARY</small><b id="envLibrary">—</b></div><div><small>CONTROL SUPPORT</small><b id="envTraining">—</b></div></div><div class="notice" id="viewerNotice">随机策略用于检查环境能否正常执行，不代表已学会目标任务。</div></section>
+      </main>
+      <aside class="train-panel"><div class="panel-head"><div><span class="eyebrow">REINFORCEMENT LEARNING</span><h2>训练工作台</h2></div><span class="train-spark">✧</span></div>
+        <div class="train-card"><div class="field-label">训练算法 <span>ALGORITHM</span></div><div class="algo-select"><label><input type="radio" name="algo" value="PPO" checked /><span><strong>PPO</strong><small>On-policy</small></span></label><label><input type="radio" name="algo" value="SAC" /><span><strong>SAC</strong><small>Off-policy</small></span></label></div><label class="field-label" for="timesteps">训练步数 <span>TIMESTEPS</span></label><input class="step-input" type="number" min="1000" max="5000000" step="1000" value="50000" id="timesteps" /><p class="field-hint">训练期间仍可使用随机演示。大型环境可能需要数十万或更多步。</p><button class="primary-btn" id="startTraining" disabled><span>▶</span> 启动训练任务</button></div>
+        <div class="run-section"><div class="run-head"><span class="section-label"><span>02</span> TRAINING RUNS</span><button class="link-button" id="runsRefresh">刷新 ↻</button></div><div class="run-list" id="runList"><div class="empty-runs">暂无训练任务</div></div></div>
+        <div class="small-note"><strong>实验隔离</strong><p>每次训练都会保存算法、环境指纹、步数、评估结果和模型 ZIP。只有完成训练且环境未改变的模型才能回放。</p></div>
+      </aside>
+    </div>
+    <footer><span>MUJOCO ENVIRONMENT CONSOLE <span class="footer-dim">/</span> SELF-HOSTED</span><span>LOCAL NETWORK ONLY · NOT FOR PUBLIC INTERNET</span></footer>
+  </div>
+  <div class="login-cover" id="loginCover"><div class="login-card"><div class="login-symbol">M<span>·</span></div><span class="eyebrow">WELCOME TO THE SIMULATION LAB</span><h1>MuJoCo Console</h1><p>通过局域网访问 Ubuntu 上的仿真与强化学习服务。</p><form id="loginForm"><label for="password">控制台访问密码</label><input id="password" type="password" required autocomplete="current-password" placeholder="输入部署时生成的密码" /><button class="primary-btn" type="submit">进入控制台 →</button></form><p id="loginError" class="form-error"></p><small>请从服务器 .env 文件获取访问密码。仅在可信局域网使用 HTTP。</small></div></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <dialog id="logDialog"><div class="log-head"><h3>训练输出日志</h3><button class="ghost small" id="closeLog">关闭 ✕</button></div><pre id="logText"></pre></dialog>
+</body>
+</html>

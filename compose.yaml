@@ -1,0 +1,20 @@
+services:
+  console:
+    build:
+      context: .
+      args:
+        INSTALL_ROBOTICS: ${INSTALL_ROBOTICS:-1}
+    image: mujoco-environment-console:local
+    container_name: mujoco-console
+    init: true
+    user: "${CONSOLE_UID:-1000}:${CONSOLE_GID:-1000}"
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${CONSOLE_PORT:-8000}:8000"
+    volumes:
+      - ./envs:/app/envs:ro
+      - ./data:/app/data
+    shm_size: 1gb
+    pids_limit: 512
+    stop_grace_period: 20s
