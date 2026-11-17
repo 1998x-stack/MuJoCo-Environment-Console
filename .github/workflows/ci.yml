@@ -92,10 +92,12 @@ jobs:
           import json
           data = json.load(open('/tmp/mujoco-catalog.json'))
           envs = data['environments']
-          assert len([e for e in envs if e['id'].startswith('gym:')]) >= 11
-          assert len([e for e in envs if e['id'].startswith('fetch:')])  >= 4
-          assert all(e['installed'] for e in envs)
-          print(f"Catalog OK: {len(envs)} installed environments")
+          by_id = {e['id']: e for e in envs}
+          required = {'gym:Hopper-v5', 'fetch:FetchReach-v4', 'custom:custom_pendulum'}
+          assert required.issubset(by_id), required - by_id.keys()
+          assert all(by_id[env_id]['installed'] for env_id in required)
+          assert len(by_id) == len(envs), 'duplicate environment IDs'
+          print(f"Catalog OK: {len(envs)} discovered environments; required core set installed")
           PY
           sid="$(curl -fsS -b /tmp/mujoco-cookies \
             -H 'Content-Type: application/json' \
