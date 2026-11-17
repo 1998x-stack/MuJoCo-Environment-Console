@@ -47,18 +47,24 @@ jobs:
         run: |
           echo "=== Uvicorn proxy options ==="
           uvicorn --help | grep -A3 -B1 -i proxy || true
-          if uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers false --help >/tmp/uvicorn-invalid.txt 2>&1; then
-            echo "Unexpectedly accepted --proxy-headers false"
+          cat >/tmp/asgi_probe.py <<'PY'
+          async def app(scope, receive, send):
+              if scope["type"] == "http":
+                  await send({"type": "http.response.start", "status": 200, "headers": []})
+                  await send({"type": "http.response.body", "body": b"ok"})
+          PY
+          set +e
+          timeout 3s env PYTHONPATH=/tmp uvicorn asgi_probe:app --host 127.0.0.1 --port 0 --workers 1 --proxy-headers false >/tmp/uvicorn-probe.txt 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -eq 124 ]; then
+            echo "CLI accepted --proxy-headers false and server started"
           else
-            echo "Confirmed: --proxy-headers false is rejected"
-            cat /tmp/uvicorn-invalid.txt
+            echo "CLI rejected --proxy-headers false (exit=$rc)"
+            cat /tmp/uvicorn-probe.txt
           fi
-          if uvicorn --no-proxy-headers --help >/tmp/uvicorn-valid.txt 2>&1; then
-            echo "Confirmed: --no-proxy-headers is accepted"
-          else
-            echo "No --no-proxy-headers option"
-            cat /tmp/uvicorn-valid.txt
-          fi
+          timeout 3s env PYTHONPATH=/tmp uvicorn asgi_probe:app --host 127.0.0.1 --port 0 --workers 1 --no-proxy-headers >/tmp/uvicorn-valid.txt 2>&1 || rc=$?
+          echo "No-proxy-headers probe finished (expected timeout or clean stop)"
       - name: Python syntax
         working-directory: .build/mujoco-console
         run: python -m compileall -q app tests scripts
