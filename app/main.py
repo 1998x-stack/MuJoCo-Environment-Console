@@ -35,6 +35,7 @@ jobs = JobManager()
 
 @asynccontextmanager
 async def lifespan(_app):
+    jobs.start_accepting()
     manager.start_reaper()
     try:
         yield
