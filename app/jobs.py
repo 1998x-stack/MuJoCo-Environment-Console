@@ -98,6 +98,11 @@ class JobManager:
             except (OSError, ValueError):
                 continue
 
+    def start_accepting(self):
+        """Allow new runs when the ASGI lifespan starts or restarts."""
+        with self.lock:
+            self._closing = False
+
     def _reconcile_finished(self, run_id, proc):
         code = proc.poll()
         if code is None:
