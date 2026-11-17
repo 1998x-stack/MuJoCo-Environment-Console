@@ -17,4 +17,4 @@ services:
       - ./data:/app/data
     shm_size: 1gb
     pids_limit: 512
-    stop_grace_period: 20s
+    stop_grace_period: 40s
