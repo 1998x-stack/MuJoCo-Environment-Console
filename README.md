@@ -16,21 +16,27 @@
 git clone https://github.com/1998x-stack/MuJoCo-Environment-Console.git
 cd MuJoCo-Environment-Console
 bash scripts/assemble-source.sh
+tar -xJf release/mujoco-console-source.tar.xz
 ```
 
-校验成功后会生成 `release/mujoco-console-source.tar.xz`，SHA-256：
+解压会将项目文件放入仓库根目录。归档 SHA-256：
 
 `2721a58736c66bc79bdce5384c217d6afd7ef46fcd3bf445899f5f7475964fed`
 
-然后解压并部署：
-
-```bash
-tar -xJf release/mujoco-console-source.tar.xz
-cd mujoco-console
-bash scripts/deploy.sh
-```
+## Ubuntu 部署
 
 部署要求 Ubuntu 22.04/24.04、Docker Engine 和 Docker Compose v2。首次构建需要联网下载 Ubuntu 软件包、Python 依赖和 CPU 版 PyTorch。
+
+```bash
+bash scripts/deploy.sh
+hostname -I
+```
+
+在同一局域网浏览器打开：
+
+`http://<Ubuntu-LAN-IP>:8000`
+
+访问密码由 `scripts/deploy.sh` 首次启动时生成，保存在项目目录 `.env`。
 
 ## 首版能力
 
@@ -42,33 +48,18 @@ bash scripts/deploy.sh
 - 浏览器通过 HTTP/MJPEG 访问，无需客户端安装 MuJoCo。
 - 局域网访问密码；默认不开放公网访问。
 
-## 局域网访问
-
-部署后运行 `hostname -I` 查看 Ubuntu 地址，在同一局域网浏览器打开：
-
-`http://<Ubuntu-LAN-IP>:8000`
-
-访问密码由 `scripts/deploy.sh` 首次启动时生成，保存在项目目录 `.env`。
-
 ## 扩展边界
 
 自定义 MJCF 环境放入 `envs/<name>/manifest.json` 与 XML/资源文件；Gymnasium 插件可按项目文档注册。MuJoCo Menagerie 模型资源不自动等于强化学习任务，必须另行定义观测、动作、奖励和终止条件。dm_control、robosuite、MuJoCo Playground 适配器列入后续路线，尚未宣称首版开箱即用。
 
 ## 验证状态
 
-源码归档前通过：
-- Python compileall
-- pytest：6 passed，2 skipped（需要 MuJoCo/Gymnasium 物理依赖的集成测试在构建环境中跳过）
-- Node.js JavaScript syntax check
-- Shell syntax check
-- JSON schema parse
+仓库 CI 会重组归档并执行 Python 语法、pytest、JavaScript、Shell 和 JSON Schema 检查。当前测试报告为 6 项通过、2 项需要 MuJoCo/Gymnasium 物理依赖的集成测试跳过。
 
-仓库 CI 会重组归档并执行静态检查与单元测试。尚未在真实 Ubuntu Docker 主机完成物理仿真、离屏渲染和 PPO/SAC 端到端实测。部署后请执行：
+尚未在真实 Ubuntu Docker 主机完成物理仿真、离屏渲染和 PPO/SAC 端到端实测。部署后请执行：
 
 ```bash
 docker compose exec console python scripts/smoke_test.py --render
 ```
 
 不要将 HTTP 登录服务直接暴露到公网。需要远程访问时使用 VPN 或正确配置 HTTPS 反向代理。
-
-环境扩展契约和 Manifest Schema 随源码归档提供。
