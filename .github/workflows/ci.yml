@@ -60,24 +60,18 @@ jobs:
           chmod 600 .env
           docker compose config --quiet
 
-      - name: Build production image
-        run: docker compose build --progress=plain
+      - name: Deploy using the documented production script
+        run: bash scripts/deploy.sh
 
-      - name: Start and wait for health
+      - name: Verify pinned physics dependencies
         run: |
-          docker compose up -d
-          health=''
-          for _ in {1..60}; do
-            health="$(docker inspect --format '{{.State.Health.Status}}' mujoco-console 2>/dev/null || true)"
-            if [[ "$health" == 'healthy' ]]; then break; fi
-            if [[ "$health" == 'unhealthy' ]]; then break; fi
-            sleep 2
-          done
-          if [[ "$health" != 'healthy' ]]; then
-            docker compose logs --tail=150 console
-            echo "Container failed health check: $health" >&2
-            exit 1
-          fi
+          docker compose exec -T console python - <<'PY'
+          import importlib.metadata
+          import mujoco
+          assert mujoco.__version__ == '3.3.7', mujoco.__version__
+          assert importlib.metadata.version('gymnasium-robotics') == '1.4.2'
+          print(f"MuJoCo {mujoco.__version__}; Gymnasium Robotics {importlib.metadata.version('gymnasium-robotics')}")
+          PY
           curl -fsS http://127.0.0.1:18000/healthz
 
       - name: Verify authenticated API and MJPEG viewer
