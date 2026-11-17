@@ -16,7 +16,7 @@ fi
 append_env_if_missing() {
   local key="$1"
   local value="$2"
-  if ! grep -q "^\${key}=" .env; then
+  if ! grep -q "^${key}=" .env; then
     printf '%s=%s\n' "$key" "$value" >> .env
   fi
 }
@@ -32,7 +32,7 @@ if [[ -z "$password_value" || "$password_value" == 'REPLACE_WITH_STRONG_UNIQUE_P
 fi
 
 port="$(sed -n 's/^CONSOLE_PORT=//p' .env | tail -1)"
-port="\${port:-8000}"
+port="${port:-8000}"
 if ! [[ "$port" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
   echo 'ERROR: CONSOLE_PORT must be an integer between 1 and 65535.' >&2
   exit 1
@@ -55,12 +55,12 @@ for _ in {1..60}; do
 done
 
 if [[ "$health" != 'healthy' ]]; then
-  echo "ERROR: Console did not become healthy (state: \${health:-unknown})." >&2
+  echo "ERROR: Console did not become healthy (state: ${health:-unknown})." >&2
   docker compose logs --tail=120 console || true
   exit 1
 fi
 
-echo "Service URL: http://<UBUNTU-LAN-IP>:\${port}"
+echo "Service URL: http://<UBUNTU-LAN-IP>:${port}"
 echo 'LAN IPv4 addresses:'
 hostname -I || true
 echo "Login password is stored in $(pwd)/.env (keep it private)."
