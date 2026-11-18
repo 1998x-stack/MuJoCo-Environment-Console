@@ -12,12 +12,15 @@ def test_render_is_opt_in():
     assert runtime.render is False
     assert runtime.status()['render'] is False
 
-    assert runtime.apply({'op': 'render', 'value': True}) == 'changed'
-    assert runtime.render is True
-    assert runtime.status()['render'] is True
 
-    assert runtime.apply({'op': 'render', 'value': False}) == 'changed'
+def test_legacy_render_command_cannot_override_the_shared_event():
+    """The render toggle is owned by the shared event; a queued command must not fight it."""
+    runtime = ViewerRuntime(fps=12)
+    assert runtime.apply({'op': 'render', 'value': True}) == 'ignored'
     assert runtime.render is False
+    runtime.render = True                       # what the worker does from the event
+    assert runtime.apply({'op': 'render', 'value': False}) == 'ignored'
+    assert runtime.render is True
 
 
 def test_runtime_command_semantics():
@@ -28,7 +31,7 @@ def test_runtime_command_semantics():
     runtime.apply({'op': 'pause', 'value': False})
     assert runtime.paused is False
 
-    runtime.apply({'op': 'render', 'value': True})
+    runtime.render = True
     runtime.mode = 'policy'
     assert runtime.apply({'op': 'random'}) == 'changed'
     assert (runtime.mode, runtime.policy) == ('random', None)

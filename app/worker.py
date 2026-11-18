@@ -66,7 +66,12 @@ def apply_process_limits(environ=None):
 
 
 class ViewerRuntime:
-    """Mutable viewer state. Rendering is opt-in: it stays off until a subscriber arrives."""
+    """Mutable viewer state.
+
+    ``render`` is not controlled by the command queue: the worker reads the shared
+    ``render_requested`` event every loop and copies it into ``render``. A legacy ``render``
+    command is ignored on purpose, so a stale queue entry can never fight the event.
+    """
 
     def __init__(self, fps=12.0):
         self.fps = max(1.0, float(fps))
@@ -84,9 +89,6 @@ class ViewerRuntime:
         op = command.get('op')
         if op == 'stop':
             return 'stop'
-        if op == 'render':
-            self.render = bool(command.get('value', False))
-            return 'changed'
         if op == 'pause':
             self.paused = bool(command.get('value', False))
             return 'changed'
@@ -120,7 +122,7 @@ def _publish(q, payload):
             pass
 
 
-def run_worker(descriptor, commands, frames, states, fps, width, height):
+def run_worker(descriptor, commands, frames, states, render_requested, fps, width, height):
     env = None
     try:
         os.environ.setdefault('MUJOCO_GL', 'osmesa')
@@ -132,7 +134,8 @@ def run_worker(descriptor, commands, frames, states, fps, width, height):
         env = make_environment(descriptor, render=True, width=width, height=height)
         obs, _ = env.reset(seed=42)
         runtime = ViewerRuntime(fps)
-        _publish(states, {'state': 'ready', 'mode': runtime.mode, 'render': False,
+        runtime.render = bool(render_requested.is_set())
+        _publish(states, {'state': 'ready', 'mode': runtime.mode, 'render': runtime.render,
                           'observation_space': str(env.observation_space),
                           'action_space': str(env.action_space),
                           'viewer_limits': limits})
@@ -180,6 +183,11 @@ def run_worker(descriptor, commands, frames, states, fps, width, height):
                     runtime.episodes += 1
                     obs, _ = env.reset()
                     runtime.episode_return = 0.0
+            # Single source of truth for rendering. The event is written atomically with the
+            # subscriber count, so it cannot disagree with it, and reading it every loop means
+            # a missed transition self-corrects instead of being lost (a queued toggle could be
+            # dropped when the command queue is full).
+            runtime.render = bool(render_requested.is_set())
             # Rendering is skipped entirely while nobody subscribes: that avoids creating the
             # rasteriser thread pool at all, and physics/state reporting keep running so the
             # UI still shows progress and commands stay responsive.
