@@ -1,0 +1,11 @@
+{
+  "kind": "mjcf",
+  "name": "双关节摆 · 目标跟踪",
+  "category": "Custom Control",
+  "xml": "scene.xml",
+  "target_qpos": [0.0, 0.0],
+  "init_qpos": [1.0, -0.6],
+  "camera": "overview",
+  "frame_skip": 5,
+  "max_episode_steps": 400
+}

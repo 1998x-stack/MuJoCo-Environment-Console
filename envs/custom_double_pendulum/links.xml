@@ -1,0 +1,19 @@
+<!-- Shared link definitions, pulled into scene.xml with <include>. -->
+<mujoco model="double pendulum links">
+  <asset>
+    <!-- Relative path resolved inside this environment directory. -->
+    <mesh name="tip_mesh" file="assets/tip.stl" scale="1 1 1"/>
+  </asset>
+  <worldbody>
+    <body name="link1" pos="0 0 1.2">
+      <joint name="shoulder" type="hinge" axis="0 1 0" damping="0.4" limited="true" range="-3 3"/>
+      <geom name="arm1" type="capsule" fromto="0 0 0 0 0 -0.6" size="0.055" rgba="0.20 0.68 0.94 1" mass="0.8"/>
+      <geom name="tip1" type="mesh" mesh="tip_mesh" pos="0 0 -0.6" rgba="1.0 0.62 0.20 1" mass="0.2"/>
+      <body name="link2" pos="0 0 -0.6">
+        <joint name="elbow" type="hinge" axis="0 1 0" damping="0.3" limited="true" range="-3 3"/>
+        <geom name="arm2" type="capsule" fromto="0 0 0 0 0 -0.45" size="0.045" rgba="0.35 0.85 0.75 1" mass="0.5"/>
+        <geom name="tip2" type="sphere" pos="0 0 -0.45" size="0.075" rgba="0.95 0.45 0.55 1" mass="0.2"/>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>

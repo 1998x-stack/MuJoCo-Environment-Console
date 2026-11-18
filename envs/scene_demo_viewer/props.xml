@@ -1,0 +1,6 @@
+<!-- Static props and a passive hinge prop, pulled into scene.xml with <include>. -->
+<mujoco model="scene props">
+  <asset>
+    <mesh name="prop_mesh" file="assets/prop.stl" scale="1 1 1"/>
+  </asset>
+</mujoco>
