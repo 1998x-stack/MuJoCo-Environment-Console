@@ -81,11 +81,13 @@ docker compose up -d --build
 |---|---|---|
 | 部署脚本报 `Console did not become healthy` | `docker compose logs --tail=120 console` | 看 uvicorn 启动异常：密码缺失 503、依赖未装、端口冲突 |
 | 容器 `unhealthy` | `docker inspect --format '{{json .State.Health}}' mujoco-console` | 健康检查是 `curl -fsS /healthz`；确认 curl 存在于镜像且 8000 未被占用 |
-| 页面能开但无画面 | `docker compose exec -T console python -c "import mujoco;print(mujoco.__version__)"`、查看会话 `error` 字段 | 多为 OSMesa 缺失或 `MUJOCO_GL` 被改写；确认 `.env` 中 `MUJOCO_GL=osmesa` |
+| 页面能开但无画面 | `GET /api/sessions/<id>` 的 `subscribers`/`render`，再看 `error` 与容器日志 | `render:false`+`subscribers:0` 表示没有订阅者在看（属正常）；有订阅者却不出帧时看 `error`（多为 OSMesa 缺失或 `MUJOCO_GL` 被改写） |
+| **viewer CPU 很高** | `GET /api/sessions/<id>` 的 `subscribers`/`render`；`docker stats` | 有订阅者时属正常（见 6.1 节的实测表）；若无订阅者仍在渲染，说明按需渲染回归，检查 `subscribe/unsubscribe` |
+| 环境目录「看不见」 | `/api/catalog` 响应中的 `problems`；或 `python scripts/validate_manifests.py` | 每个被跳过的目录都带 `reason`（`missing_xml`、`xml_outside_environment`、`unsupported_kind` …）与 `detail` |
 | 浏览器有画面但 ffmpeg 抓不到流 | 检查 MJPEG 分帧是否为 CRLF（见 `docs/architecture/system-overview.md` 第 4 节） | `python -c` 断言 `b'\r\n--frame' in data` |
 | 登录返回 429 | 该 IP 在窗口内失败次数超限 | 等待 `LOGIN_WINDOW_SECONDS`，或 `docker compose restart console` 清空内存计数 |
-| 无法新建 viewer（400 Viewer limit reached） | 有被遗弃的浏览器会话占用槽位 | 等待 `SESSION_IDLE_SECONDS` 自动回收，或重启容器 |
-| 训练立即 `failed` | `cat data/runs/<id>/output.log` | 常见原因：环境不可训练、注册模块导入失败、显存/内存不足 |
+| 无法新建 viewer（400 Viewer limit reached） | 有被遗弃的浏览器会话占用槽位 | 等待 `SESSION_IDLE_SECONDS` 自动回收，或重启容器。这类会话已不再渲染，CPU 影响约 1.5% |
+| 训练立即 `failed` | `cat data/runs/<id>/output.log` 与 `status.json` | 常见：环境不可训练、注册模块导入失败、OOM。退出码 137/SIGKILL 会明确提示「容器内存上限 / 外部 kill / 宿主 OOM」 |
 | 重启后训练变 `interrupted` | `cat data/runs/<id>/status.json` | 预期行为：服务关停会终止训练进程组并标注原因 |
 | 模型无法回放 | 同上 `status.json` 的 `fingerprint` 与当前环境比对 | 环境定义变更后必须重新训练（设计如此） |
 | 权限错误写 `data/` | `ls -ld data data/runs` | 确认 `.env` 的 `CONSOLE_UID/GID` 与宿主机目录属主一致 |
@@ -103,7 +105,30 @@ du -sh data/runs
 ```
 
 正常空闲时容器内应只有 `docker-init` 与 `uvicorn` 两个进程。若看到
-`multiprocessing.spawn` 或 `app.trainer`，说明有活跃 viewer/viewer 尚未回收或训练正在运行。
+`multiprocessing.spawn` 或 `app.trainer`，说明有活跃 viewer（且确有订阅者）或训练正在运行。
+
+## 6.1 Viewer 资源调优（实测依据）
+
+OSMesa/llvmpipe 是 CPU 软光栅化，viewer 的开销几乎全在渲染与线程空转上（见
+`docs/architecture/system-overview.md` 第 8 节）。可调项都在 `.env`：
+
+| 变量 | 默认 | 作用 | 何时调整 |
+|---|---|---|---|
+| `VIEWER_FPS` | 12 | 每 viewer 帧率（1–60） | 降帧率可线性降 CPU：6 fps 约 130%、8 fps 约 182%（640x480） |
+| `VIEWER_WIDTH`/`VIEWER_HEIGHT` | 640/480 | 渲染分辨率（64–1920） | 320x240 比 640x480 约省 24%（固定开销占大头，不能只靠降分辨率） |
+| `VIEWER_RENDER_THREADS` | 2 | llvmpipe 光栅化线程数（1–64） | 重场景或大分辨率可提到 4；降到 1 会使帧率跌到约 7.9 fps |
+| `VIEWER_BLAS_THREADS` | 1 | viewer 进程内 BLAS/OpenMP 线程 | 一般不用改，渲染不需要 BLAS |
+| `CONSOLE_CPU_LIMIT` | 不设 | 容器 CPU 上限（cpus） | 与其他业务共存且希望有硬上限时 |
+| `CONSOLE_MEM_LIMIT` | 不设 | 容器内存上限 | 同上；触发时会给出明确的 137/SIGKILL 训练错误信息 |
+
+这些是 **viewer 专用**变量，不改变 trainer 的线程数（trainer 的 BLAS 线程仍由容器环境决定，
+未设置时等于核数）。
+
+调整后必须重新验证：`smoke_test.py --render --all`、浏览器画面是否流畅（不能只降 CPU 而把
+帧率压到明显卡顿），以及训练与 viewer 并发时的表现。
+
+渲染只发生在**有浏览器连接**时；关闭页面后 CPU 应回落到约 1–2%。若否则属回归，检查
+`ViewerSession` 的 `subscribers` 计数。
 
 ## 7. 可选的 MuJoCo Menagerie 导入
 

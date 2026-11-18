@@ -2,155 +2,166 @@
 
 ## Metadata
 
-- Timestamp: 2026-11-18T04:13:37Z (UTC)
-- Agent: Pi (MuJoCo Environment Console local deploy / verify / fix agent)
-- Host type: Ubuntu 24.04.3 LTS 物理服务器（本机执行，非容器、非 macOS）
-- OS: Ubuntu 24.04.3 LTS (noble), kernel 7.0.0-38-generic, x86_64
-- Base SHA: `f64bc8f5319754e3228bf626804ba408518c5171`
-- Final local SHA: `3f3ccb3f9cde03c967662d6486ac1578447eb2e3`（代码 tip；其后仅文档元数据提交）
-- Remote main SHA: `f64bc8f5319754e3228bf626804ba408518c5171`（本轮开始时 = BASE_SHA，远端无新提交）
-- Branch: `agent/local-deploy-20261118-1058`
+- Timestamp: 2026-11-18T06:35:00Z (UTC)
+- Agent: Pi（第二轮：Viewer 资源实证优化 + 环境诊断 + CI 覆盖度）
+- Host type: Ubuntu 24.04.3 LTS 物理服务器（本机执行；同机另有 27 个业务容器）
+- OS: Ubuntu 24.04.3 LTS (noble), kernel 7.0.0-38-generic, x86_64, 12 逻辑线程, 31 GiB
+- Base SHA: `e422870481d68dd20feeb4e36538ee57306b97e8`（= PR #1 HEAD；`origin/main` 仍为 `f64bc8f`）
+- Final local SHA: `PENDING_COMMIT`（提交后回填；其在 PR #1 分支上）
+- Remote main SHA: `f64bc8f5319754e3228bf626804ba408518c5171`（PR #1 尚未合并）
+- Branch: `agent/local-deploy-20261118-1058`（按指示继续在 PR #1 分支协作，未从旧 main 重做）
 - PR: https://github.com/1998x-stack/MuJoCo-Environment-Console/pull/1
-- CI run（代码 tip `3f3ccb3`）: https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44235254442 — **success**（2m36s）
-- CI run（后续提交 `3492241` / `147f814` / 最新 tip）: https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44235963709、https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44236291427 — 均 **success**
-- CI 历史：`7c8bf5f` failure（顶层 `import numpy` 导致 pytest 收集失败，已修）→ 其后每一次提交均 success
+- CI run: `PENDING`（推送后填写）
 
 ## Current State
 
 | 维度 | 状态 | 说明 |
 |---|---|---|
-| Deployment | **PASS** | `scripts/deploy.sh` exit 0；容器 `Up (healthy)`，端口 `8010→8000` |
-| Container health | **PASS** | `/healthz` 返回 `{"ok":true,...}`；`restarts=0` |
-| Static / unit tests | **PASS** | compileall / node / bash -n / json.tool 全通过；`pytest` **23 passed** |
-| Environment smoke | **PASS** | `smoke_test.py --render --all` **18/18**，帧 480×640×3，无 MuJoCo 警告 |
-| API / auth | **PASS** | L1 全量断言 0 失败（401/403 路径、限流、校验、viewer 上限） |
-| Browser E2E | **PASS** | 真 Chromium over LAN IP，两套脚本 **48/48** 断言通过 |
-| MJPEG | **PASS（修复后）** | 严格 RFC 2046：84 个 `\r\n--frame`，84/84 帧解码 |
-| PPO | **PASS** | smoke 请求 1000 → 实际 2048 步；评估 28/30/28；checkpoint + 隔离回放通过 |
-| SAC | **PASS** | smoke 请求 1000 → 实际 1000 步；评估 58/62/64；checkpoint + 隔离回放通过 |
-| Model replay | **PASS** | 浏览器回放：服务端 `mode=policy` 并绑定 `policy_run`，画面持续更新 |
-| Session cleanup | **PASS** | 空闲回收（20 s 实例验证）、viewer 上限、无进程累积 |
-| Restart / Persistence | **PASS** | 训练中重启 → `interrupted` 且进程组被清理；4 条历史 run 完整保留 |
-| Resource tests | **PARTIAL** | 有界测试全通过；小时级/满负载 **NOT_RUN** |
-| CI (GitHub Actions) | **PASS** | run 44235254442 success；新增的 schema 校验与 MJPEG 分帧断言均实测执行 |
+| Deployment | **PASS** | `scripts/deploy.sh` exit 0；容器 `Up (healthy)`，`8010->8000/tcp`，镜像 `sha256:12c10d83…` |
+| Container health | **PASS** | `/healthz` 正常；`restarts=0` |
+| Unit / integration tests | **PASS** | 完整依赖 **55 passed, 0 skipped**；轻量依赖 54 passed, 1 skipped（守门测试） |
+| Environment smoke | **PASS** | `smoke_test.py --render --all` **18/18** |
+| API / auth | **PASS** | L1 全量断言 0 失败 |
+| Browser E2E | **PASS** | 真 Chromium over LAN：**48/48**（30 主流程 + 18 新环境/回放） |
+| Third-party MJPEG | **PASS** | ffmpeg（文件 60 帧 / 实时 HTTP 60 帧 @12fps）、OpenCV（60 帧 640×480），无 boundary 错误 |
+| **Viewer CPU（无人观看）** | **PASS（本轮优化）** | 512% → **1.5%**（−99.7%）；断开后 499% → **1.6%** |
+| **Viewer CPU（单 viewer 观看）** | **PASS（本轮优化）** | 500% → **159%**（−68%），帧率 10.48 → 10.90 fps |
+| **Viewer CPU（3 viewer 观看）** | **PASS（本轮优化）** | 860% → **549%**（−36%），容器任务数 142 → **42**，帧率 10.75 → 11.30 fps |
+| PPO | **PASS** | 请求 1000 → 实际 2048 步；评估 28/30/28；checkpoint + 隔离回放通过 |
+| SAC | **PASS** | 请求 1000 → 实际 1000 步；评估 58/62/64；checkpoint + 隔离回放通过 |
+| Model replay | **PASS** | 浏览器回放 `mode=policy` 并绑定 `policy_run`，画面持续更新 |
+| Training lifecycle | **PASS** | 并发限制 / 取消 / 训练中重启 → `interrupted` + 进程组清理 / 持久化 |
+| Session cleanup / restart | **PASS** | 10 次创建销毁无累积；优雅停止 6–7 s；重启后 healthy |
+| Catalog diagnostics | **PASS** | 坏环境以结构化 `problems` 上报，控制台仍可用；仓库自带 envs 零问题 |
+| Resource limits | **PASS（opt-in）** | `CONSOLE_CPU_LIMIT` / `CONSOLE_MEM_LIMIT` 默认不限制 |
+| CI (GitHub Actions) | `PENDING` | 推送后确认，重点是新的「严格测试套件」step |
+| Long-run stability | **NOT_RUN** | 未获授权（会影响同机其他业务容器） |
+| Third-party LAN **device** | **NOT_RUN** | 无可用设备 |
+| Convergence | **NOT_RUN** | 需授权与算力预算 |
+
+## 本轮核心结论：为什么 3 个 Viewer 要 815% CPU
+
+1. 无 GPU → `MUJOCO_GL=osmesa` → Mesa llvmpipe **CPU 软光栅化**；
+2. llvmpipe 默认按核数建 12 个线程并自旋，numpy/OpenBLAS 再建 12 个（对渲染无用）；
+3. `run_worker` **无条件**每帧 `env.render()`，与是否有浏览器观看无关。
+
+成本构成（单 viewer 每循环）：物理 0.12 ms（<1%）、**渲染约 490 ms CPU / 约 30 ms 墙钟（>99.5%）**、
+JPEG+PIL 1.0 ms、策略推理 0.19 ms。单个 worker 39 线程。
 
 ## Completed Work
 
-1. 在真实 Ubuntu 24.04 宿主机完成 `scripts/deploy.sh` 全流程部署（避让被其他业务占用的 8000 端口）。
-2. 执行 L0–L5 分层验证，形成命令 + 退出码 + 日志级别的可复核证据。
-3. 定位并修复 **MJC-P2-001**：MJPEG 分片以字面量 `\r\n` 结尾，导致规范 MJPEG 客户端完全无法解析。
-4. 用修复前后对照实验量化缺陷（严格分隔符 0 → 84；严格解码 0 → 84 帧）。
-5. 硬化 CI（新增 MJPEG 分帧断言、schema 校验依赖、新环境断言），补齐 7 个回归测试。
-6. 修补 AI/CI 缺口：新增 manifest × JSON Schema 校验脚本与测试（此前 schema 无人执行）。
-7. 新增两个可直接复制的示例环境，覆盖此前完全未被测试的路径：
-   `custom_double_pendulum`（`<include>` + 二进制 mesh）与 `scene_demo_viewer`（`view_only`）。
-8. 修复新增环境暴露的 UI 缺陷 **MJC-P3-004**（两个同名「自定义」分类标签页）。
-9. 建立持久化 Handoff 体系：`AGENTS.md`、`docs/architecture/`、`docs/runbooks/`、
-   `docs/verification/`、`docs/handoff/`。
+1. **按需渲染**（P1）：只有存在订阅者才创建光栅化器；无人观看时物理继续步进、状态继续上报。
+2. **viewer 线程预算**（P1）：默认 `LP_NUM_THREADS=2` + BLAS=1，实测 CPU 更低且帧率更高。
+3. **可配置化**：`VIEWER_FPS` / `VIEWER_WIDTH` / `VIEWER_HEIGHT` / `VIEWER_RENDER_THREADS` /
+   `VIEWER_BLAS_THREADS`，以及可选 `CONSOLE_CPU_LIMIT` / `CONSOLE_MEM_LIMIT`。
+4. **修复自引入回归**（MJC-P1-102）：`training_smoke_test.py` 未订阅导致不再产帧；已修并文档化契约。
+5. **第三方 MJPEG 实测**：ffmpeg（文件/实时 HTTP）+ OpenCV，≥60 帧、尺寸一致、无 boundary 错误；
+   获取与解码分离，凭据不入命令行/日志/Git。
+6. **CI 覆盖度**：严格模式 `CONSOLE_TEST_REQUIRE_PHYSICS=1`（依赖缺失 → fail）+ 新 step 在部署镜像内
+   跑完整套件并断言 `skipped == 0`。
+7. **环境导入可诊断**（P3）：`scan()` 返回结构化 `problems`；`jsonschema` 进入运行时依赖。
+8. **训练错误可诊断**（P2）：137/SIGKILL 明确解释为内存上限 / 外部 kill / 宿主 OOM。
+9. **文档与 Handoff**：架构成本拆解、runbook 6.1 资源调优、验证报告、本目录 run 记录。
 
 ## Confirmed Findings
 
-- 历史 CI 基线（16 环境 + PPO/SAC）在本机**真实复现**，并扩展到 18 环境。
-- 旧 CI 与 `smoke_test.py` 对 MJPEG 的断言（仅检查 `Content-Type: image/jpeg` 字符串）
-  **无法**发现分帧缺陷；这是本轮修复必须同时硬化 CI 的原因。
-- 宿主机 8000 端口被无关项目占用。**不要**为了「按文档使用 8000」而停止其他业务服务。
-- 本机存在 27 个其他业务容器；本轮所有操作均在 `mujoco-console` 容器与 `data/`、`envs/` 内完成，
-  未触碰其他容器、卷或服务。
-- MuJoCo 3.3.7 **无法加载 ASCII STL**（`number of faces should be between 1 and 200000`），
-  必须使用二进制 STL。已写入 `AGENTS.md` 与 `envs/README.md`。
+- 实测证明「3 viewer ≈ 815% CPU」的根因是软光栅化 + 无条件渲染 + 线程池按核数空转。
+- 关闭阴影/MSAA（`shadowsize=0` / `offsamples=0`）**无任何收益**（像素与时间差异 0）→ 未引入。
+- 降分辨率收益有限（640×480 → 320×240 仅约 −24%），固定开销占主导 → 作为可调项。
+- `LP_NUM_THREADS` 从 12 降到 2：CPU −67%，帧率反而 +10%（自旋线程互相争抢）。
+- trainer 约 2.94 核 / 17 线程；trainer + 1 viewer 并发时容器 477.9%，宿主仍有约 55% 空闲。
+- 宿主机 8000 端口仍被其他项目占用（PID 114256 未变），本轮继续使用 8010。
 
 ## Open Issues
 
 | ID | 级别 | 状态 | 摘要 |
 |---|---|---|---|
-| MJC-P2-001 | P2 | **FIXED** | MJPEG 分片结尾非 CRLF，规范客户端无法解析 |
-| MJC-P3-002 | P3 | **FIXED** | CI/冒烟测试对 MJPEG 的断言过弱 |
-| MJC-P3-003 | P3 | **FIXED** | `schemas/environment.schema.json` 从未被执行校验 |
-| MJC-P3-004 | P3 | **FIXED** | 两个同名「自定义」分类标签页 |
-| MJC-P3-005 | P3 | OPEN（仅记录） | 无「列出/关闭当前 viewer 会话」API；被遗弃会话占用槽位至 `SESSION_IDLE_SECONDS` |
-| MJC-P3-006 | P3 | OPEN（仅记录） | `data/runs/` 无配额与清理策略，长期运行会持续增长 |
-| MJC-P3-007 | P3 | OPEN（仅记录） | compose 未设置内存/CPU 上限（仅有 `pids_limit` 与单任务约束） |
-| MJC-P3-008 | P3 | OPEN（仅记录） | `AUTH` 失效 token 仅在登录或鉴权时惰性清理，极长会话下缓慢增长 |
+| MJC-P1-101 | P1 | **FIXED** | viewer 无条件渲染导致约 815% CPU；已改为按需渲染 + 线程预算 |
+| MJC-P1-102 | P1 | **FIXED** | 自引入回归：`training_smoke_test.py` 未订阅不再产帧 |
+| MJC-P2-103 | P2 | **FIXED** | SIGKILL/OOM 训练退出原因不可诊断 |
+| MJC-P3-104 | P3 | **FIXED** | CI 集成测试可能被静默跳过（4 skipped） |
+| MJC-P3-105 | P3 | **FIXED** | 坏环境目录被静默忽略，前后端都无提示 |
+| MJC-P3-106 | P3 | OPEN（仅记录） | uvicorn 默认线程池按需扩张至约 16 线程且不回收 |
+| MJC-P3-107 | P3 | OPEN（仅记录） | 缺 viewer 会话枚举/清理接口（影响已从资源降级为槽位） |
+| MJC-P3-108 | P3 | OPEN（仅记录） | `data/runs/` 无保留策略 |
+| MJC-P3-109 | P3 | OPEN（仅记录） | trainer 线程数未加默认上限（无实测依据，不引入） |
 
 ## Blockers
 
 - 无阻塞主流程的 P0/P1 缺陷。
-- 未执行项（见 `runs/20261118-105857-f64bc8f/next-steps.md`）：独立第三方设备局域网验证、
-  小时级稳定性、满负载压力 —— 均因**未获授权**或**会影响同机其他业务**而保持 `NOT_RUN`。
+- 未执行项均为「未获授权」或「无可用设备」：小时级稳定性、满负载压力、第三方设备局域网验证、收敛性验证。
 
 ## Files Changed
 
 ```text
-.github/workflows/ci.yml                      MJPEG 分帧断言 + jsonschema 依赖 + 新环境断言
-.gitignore                                    + .artifacts/（原始证据不入库）
-README.md                                     示例环境与 MJPEG 说明
-AGENTS.md                                     新增：持久化工程规范
-app/main.py                                   MJPEG 分片改为 RFC 2046 CRLF（+ mjpeg_part 助手）
-app/static/app.js                             分类标签去重（自定义控制 / 自定义场景）
-envs/README.md                                示例表格 + include/mesh/二进制 STL 说明
-envs/custom_double_pendulum/                  新增：include + mesh 可训练 MJCF 示例
-envs/scene_demo_viewer/                       新增：view_only 仅演示场景示例
-schemas/                                      未改；新增校验脚本
-scripts/validate_manifests.py                 新增：manifest × schema 校验入口
-tests/test_api.py                             + MJPEG 分帧 / view_only 拒绝训练 回归测试
-tests/test_catalog.py                         + 示例发现、schema 校验、view_only 不变量
-tests/test_integration.py                     + 两个新环境的物理/渲染集成测试
-docs/architecture/system-overview.md          新增
-docs/runbooks/ubuntu-deployment.md            新增
-docs/verification/2026-11-18-local-verification.md   新增
-docs/handoff/**                               新增：Handoff 体系与本轮记录
+app/worker.py                 按需渲染（ViewerRuntime）+ 线程预算（apply_process_limits）
+app/sessions.py               subscribe/unsubscribe 契约、viewer_config 校验、ctx 注入、status 扩展
+app/main.py                   MJPEG 端点订阅/退订、catalog problems、lifespan 警告日志
+app/catalog.py                scan() 结构化诊断（severity/reason/detail），坏目录不再静默
+app/jobs.py                   exit_reason(): 137/143/信号可诊断
+app/static/app.js             渲染 problems 摘要
+app/static/index.html         新增 #catalogProblems 容器
+compose.yaml                  可选 cpus / mem_limit（默认不限制）
+requirements.txt              新增 jsonschema>=4.20,<5
+.env.example                  viewer 参数与可选上限（附实测说明）
+scripts/training_smoke_test.py   读帧前订阅（修 MJC-P1-102）
+scripts/validate_manifests.py    schema + scan() 诊断，任何 problem 即失败
+tests/test_worker.py          新增：渲染开关、命令语义、线程预算
+tests/test_sessions.py        订阅计数驱动渲染、viewer_config、ctx 注入
+tests/test_api.py             流订阅/退订、catalog problems、坏环境不阻断
+tests/test_catalog.py         11 种坏目录 reason、schema warning、缺失 env root
+tests/test_integration.py     require() 严格模式
+.github/workflows/ci.yml      新增部署镜像内完整测试 step（禁止 skip）
+AGENTS.md / README.md / docs/**  见 changes.md
 ```
 
 ## Evidence
 
-本机证据目录（未提交）：`.artifacts/runs/20261118-105857-f64bc8f/`
-索引与逐文件说明见 `docs/verification/2026-11-18-local-verification.md` 第 5 节。
+本机证据目录（未提交）：`.artifacts/runs/20261118-053523-e422870/`
 
-关键对照实验：
+关键文件：`phase2-viewer-before.log`（优化前 512/500/499/860%）、`phase2-viewer-final.log`
+（优化后 1.5/159/1.6/549%）、`component-bench.log`（成本拆解）、`phase2-knob-sweep.log` 与
+`knob-sweep.jsonl`（线程/分辨率/帧率旋钮）、`multiviewer-scaling.log`（3 并发线程缩放）、
+`quality-bench.log`（阴影/MSAA 无收益）、`third-party-mjpeg.log` + `ffmpeg-decode.log` +
+`ffmpeg-live.log` + `opencv-decode.log`（第三方解码）、`render-toggle-final.log`（订阅→渲染行为）、
+`training-smoke-after.log`、`l1-final.log`、`smoke-test-after.log`、`browser-e2e-after.log`、
+`browser-replay-after.log`、`l4b-after.log`、`l5-final.log`、`pytest-final.log`、
+`resource-samples-*.csv`。
 
-- `mjpeg-conformance.log`（修复前）：`rfc2046_delimiters_CRLF--frame = 0`，
-  分片尾部 `5c725c6e`（字面量 `\r\n`），严格解析得到 0 帧。
-- `mjpeg-conformance-after-fix.log`（修复后）：`rfc2046_delimiters_CRLF--frame = 84`，
-  分片尾部 `ffd9`（JPEG EOI），严格解析得到 **84/84** 帧。
+仓库内只保留脱敏摘要（`docs/verification/2026-11-18-viewer-resource-optimisation.md` 与本目录）。
 
 ## Remaining Risks
 
-1. MJPEG 修复后仅由 Chromium 与严格 Python 解析器验证；未用 ffmpeg/OpenCV 实测（本机未安装）。
-   分帧现在符合 RFC 2046，风险低，但下轮可用 `ffmpeg -i http://.../stream` 补一次实测。
-2. 训练质量结论仅限 1000 步级 smoke；**未做收敛性验证**，不得据此宣称「策略学会了任务」。
-3. 新增的 `custom_double_pendulum` 目标为 `[0,0]`（垂直下垂），初始位姿偏离后回报下降；
-   这是演示环境，不是有研究意义的任务定义。
-4. 本机 `SESSION_IDLE_SECONDS` 相关的会话占用风险仅在自动化场景显现，人工使用无影响。
-5. ~~GitHub Actions 结果尚未确认~~ → 已确认 **success**（run 44235254442）。CI 首次运行曾失败一次：本 Agent 在 `tests/test_integration.py` 顶层 `import numpy`，而 CI 轻量依赖集不含 numpy，导致 pytest **收集阶段**报错；改为 `pytest.importorskip('numpy')` 后通过（本地用 `python:3.12-slim` + 同款依赖复现验证）。
+1. 资源对照实验的窗口为 20–26 s，属于有界测量；**未做小时级驻留**，长稳结论不可外推。
+2. `LP_NUM_THREADS=2` 在重场景下帧率余量较小（Humanoid-v5 实测 11.70 fps）。若未来引入
+   几何更复杂的场景或更大分辨率，应实测后再决定是否提高该值。
+3. 按需渲染是行为契约变更：**任何新的程序化 `wait_frame()` 消费者都必须先 `subscribe()`**
+   （上一轮已有一次自引入回归的教训）。
+4. 容器默认无 CPU/内存上限；多 viewer + 训练并存时可能挤占同机其他业务。
+5. ffmpeg/OpenCV 的验证基于本机部署镜像；未在 CI 中固化（工具镜像较大），属人工验证项。
+6. `render` 状态目前不在前端显式展示（仅在 API 与日志中可见），排障需要 curl。
 
 ## Exact Next Steps
 
-1. ~~回填 `Final local SHA`、`PR`、`CI run`，确认 CI 全绿~~ → **已完成**：CI success，
-   日志确认 `3/3 manifests valid`、`MJPEG framing OK: 56 CRLF-delimited boundaries`、
-   `Catalog OK: 18 discovered environments`、`18/18 environments passed`。
-2. 用 `ffmpeg` 或 `cv2.VideoCapture` 抓取 `/api/sessions/<id>/stream`，作为 MJPEG 修复的第三方实测。
-3. 处理 MJC-P3-005：为非 API 客户端提供会话枚举/清理能力（例如只读的 `GET /api/sessions`
-   或容器启动时清理孤儿会话）。
-4. 处理 MJC-P3-006/007：为 `data/runs/` 增加保留策略，或在 `compose.yaml` 中加入
-   `mem_limit`/`cpus` 与文档说明。
-5. 在获授权的前提下执行一次小时级稳定性测试，并单独报告（基础验收与长稳分开）。
-6. 收敛性验证（可选、需要授权）：对 `gym:InvertedPendulum-v5` 训练 20 万步，
-   记录学习曲线并与随机基线对比。
+1. 回填 `Final local SHA` / `CI run`，确认 CI 全绿（重点：严格测试 step 输出 `0 skipped`）。
+2. NS-2：用同局域网另一台设备完成真实浏览器验收，并记录连接期间的 viewer CPU。
+3. NS-3：新增只读 `GET /api/sessions`，缓解被遗弃会话占用槽位的问题。
+4. NS-6：收敛 uvicorn 默认线程池（可选，属优化而非缺陷）。
+5. 获授权后执行 NS-5（≥2 小时稳定性）与 NS-7（收敛性）。
+6. 若引入更复杂场景/更高分辨率，先重跑 `.artifacts/loop_probe.py` 再决定 `VIEWER_RENDER_THREADS`。
 
 ## Resume Instructions
 
 ```bash
 cd /home/ubuntu/codes/MuJoCo-Environment-Console
-git fetch origin --prune
-git log --oneline -10
-cat AGENTS.md
-cat docs/handoff/latest.md
+git fetch origin --prune && git log --oneline -12
+cat AGENTS.md && cat docs/handoff/latest.md
 ls docs/handoff/runs/
 ```
 
-- 若 `origin/main` 已前进：先 `git log <BASE_SHA>..origin/main --oneline` 与 `git diff`，
-  判断是否与本轮改动冲突，再决定 rebase。
-- **部署端口**：本机 8000 被其他业务占用，请继续使用 `.env` 中的 `CONSOLE_PORT=8010`。
-- **不要**运行 `docker compose down -v` / `docker system prune`，那会破坏同机其他 27 个业务容器。
-- 如需重新验证：`bash scripts/deploy.sh` → `pytest -q` → `smoke_test.py --render --all` →
-  `training_smoke_test.py`；浏览器脚本模板在本机 `.artifacts/browser_*.js`（未提交，可重建）。
+- **部署端口继续用 8010**；不要动 8000 上属于其他项目的服务。
+- 不要 `docker compose down -v` / `docker system prune`：同机另有 27 个业务容器。
+- 复现资源对照：`python3 .artifacts/sampler.py mujoco-console <秒> 2 <label>`（cgroup 精确采样）
+  + `.artifacts/phase2_viewer_experiment.sh`、`.artifacts/render_toggle_check.sh`、
+  `.artifacts/third_party_mjpeg_check.sh`（这些脚本在 `.artifacts/`，未提交，可按需重建）。
+- 跑完整测试：见 `AGENTS.md` 的 `CONSOLE_TEST_REQUIRE_PHYSICS=1` 命令（必须 0 skipped）。

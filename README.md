@@ -30,9 +30,10 @@ bash scripts/deploy.sh
 - **Gymnasium MuJoCo v5**：11 个标准控制、运动、机械臂和人形任务。
 - **Gymnasium Robotics Fetch**：4 个 Fetch 机械臂任务；默认安装，可在 `.env` 设置 `INSTALL_ROBOTICS=0` 跳过。
 - **自定义 MJCF/XML**：扫描 `envs/<name>/manifest.json`，支持相对路径资源、网格和纹理。仓库自带 `custom_pendulum`、`custom_double_pendulum`（`<include>` + 网格）与 `scene_demo_viewer`（`view_only` 仅演示）三个示例，可直接复制为模板。
-- **仿真**：独立进程运行环境，服务器端 OSMesa 离屏渲染，通过 MJPEG 向浏览器传输。MJPEG 分片按 RFC 2046 使用 CRLF 分隔，除浏览器外也可被 ffmpeg/OpenCV 等标准客户端解析。
+- **仿真**：独立进程运行环境，服务器端 OSMesa 离屏渲染，通过 MJPEG 向浏览器传输。MJPEG 分片按 RFC 2046 使用 CRLF 分隔，除浏览器外也可被 ffmpeg/OpenCV 等标准客户端解析（已用 ffmpeg 实测：实时流 60 帧、640×480）。
+- **按需渲染**：只在有浏览器连接时才渲染。无人观看的会话 CPU 从约 5 核降到约 0.015 核，仍保持物理步进与状态上报；每个 viewer 的光栅化/BLAS 线程数受控，避免默认线程池按核数空转。
 - **强化学习**：PPO、SAC；训练日志、进度、评估结果、模型保存和策略回放。PPO 使用完整 rollout batch，实际步数可能向上取整（例如请求 1,000 步时默认 rollout 可能执行 2,048 步）；界面同时展示请求步数与实际完成步数。
-- **资源保护**：限制并发查看器、单训练任务、空闲会话回收，以及服务退出时的 worker 清理。
+- **资源保护**：限制并发查看器、单训练任务、空闲会话回收、按需渲染与 viewer 线程预算，以及服务退出时的 worker 清理。实测 3 个并发查看器从约 860% CPU 降到约 549%，线程数从 142 降到 42。
 
 当前固定 MuJoCo 3.3.7 与 Gymnasium Robotics 1.4.2；不要单独升级 MuJoCo 大版本，升级前必须通过全部 Fetch 环境、渲染和训练 CI。
 
@@ -49,6 +50,11 @@ bash scripts/deploy.sh
 | `MAX_VIEWERS` | `3` | 最大并发仿真查看器 |
 | `INSTALL_ROBOTICS` | `1` | 是否安装 Fetch Robotics 依赖 |
 | `SESSION_IDLE_SECONDS` | `900` | 无活动会话自动回收时间 |
+| `VIEWER_FPS` | `12` | 每 viewer 帧率 |
+| `VIEWER_WIDTH` / `VIEWER_HEIGHT` | `640` / `480` | 服务端渲染分辨率 |
+| `VIEWER_RENDER_THREADS` | `2` | 每个 viewer 的光栅化线程数（详见运维手册 6.1） |
+| `VIEWER_BLAS_THREADS` | `1` | 每个 viewer 进程的 BLAS/OpenMP 线程数 |
+| `CONSOLE_CPU_LIMIT` / `CONSOLE_MEM_LIMIT` | 不设 | 可选的容器 CPU / 内存上限 |
 | `LOGIN_MAX_ATTEMPTS` | `8` | 单 IP 登录失败次数上限 |
 | `LOGIN_WINDOW_SECONDS` | `300` | 登录失败统计窗口 |
 | `COOKIE_SECURE` | `0` | HTTPS 反向代理场景设为 `1` |
@@ -107,6 +113,8 @@ envs/my_robot/
 ```
 
 `target_qpos` 和 `init_qpos` 的长度必须等于模型的 `nq`。没有执行器的场景需设置 `"view_only": true`，只能演示，不能训练。请把 include、mesh、texture 等依赖放在该环境目录内，保持相对路径完整。
+
+manifest 不合法时不会阻止服务启动：控制台会在 `/api/catalog` 的 `problems` 中列出该目录及原因（缺少 `manifest.json`、JSON 非法、XML 缺失、资源路径逃逸目录、`kind` 不支持等），界面也会显示提示。
 
 ### Gymnasium 插件
 

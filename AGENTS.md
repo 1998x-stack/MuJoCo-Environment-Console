@@ -34,7 +34,9 @@ docs/                  架构、运维手册、验证报告、Handoff
 ## 3. 核心架构与不变量
 
 - **进程隔离**：每个 viewer 一个 `multiprocessing` spawn 子进程（独立 OpenGL context）；每个训练任务一个独立进程组（`start_new_session=True`）。
-- **渲染**：服务器端 OSMesa 离屏渲染（`MUJOCO_GL=osmesa`），JPEG 经 MJPEG 传给浏览器。
+- **viewer 按需渲染**：子进程只在**有订阅者**时才创建光栅化器并出帧（`ViewerSession.subscribe()/unsubscribe()`；MJPEG 端点为每个连接自动订阅）。无人订阅时仍继续物理步进与状态上报。任何程序化读取 `wait_frame()` 的代码都必须先 `subscribe()`，否则永远收不到帧。
+- **viewer 线程预算**：`apply_process_limits()` 在导入 numpy/MuJoCo 前设置 `LP_NUM_THREADS`（默认 2）与 BLAS/OpenMP 线程数（默认 1）。默认线程池会按核数创建线程且空转：本机 12 线程下 1 个 viewer 空闲订阅时约 520% CPU，限制后约 170%，帧率反而更高。不要在没有实测数据的情况下调整这两个默认值（`tests/test_worker.py` 对此有 pin）。
+- **渲染**：服务器端 OSMesa 离屏渲染（`MUJOCO_GL=osmesa`），JPEG 经 MJPEG 传给浏览器。实测渲染占 viewer 循环开销的 99.5% 以上（物理 0.12 ms、JPEG 编码 0.84 ms、策略推理 0.19 ms，而单帧渲染约 30 ms 墙钟 / 约 490 ms CPU）。
 - **MJPEG 分帧必须符合 RFC 2046**：分片以 `--frame\r\n` 开始、以**真实 CRLF** 结束。绝不要写成 `b'\\r\\n'`（字面量反斜杠），浏览器能容错但 ffmpeg/OpenCV/VLC 会完全解析失败。
 - **模型—环境绑定**：`jobs.fingerprint()` 对 MJCF 入口 XML 与目录内全部资源（含 mesh/texture/include）取哈希；环境变更后旧模型拒绝回放。
 - **并发上限**：单训练任务、`MAX_VIEWERS` 个 viewer、空闲会话自动回收。这些是产品行为，不是缺陷。
@@ -64,9 +66,16 @@ python3 -m compileall -q app tests scripts
 node --check app/static/app.js
 bash -n scripts/*.sh
 python3 -m json.tool schemas/environment.schema.json > /dev/null
+python scripts/validate_manifests.py          # schema + 发现诊断（需要 jsonschema）
 
 # 单元测试：需要 fastapi/uvicorn/httpx/pytest/jsonschema
 python -m pytest -q
+
+# 完整测试（含依赖 MuJoCo 的集成测试）。CONSOLE_TEST_REQUIRE_PHYSICS=1 会把
+# 「依赖缺失」从 skip 变成 fail，CI 用它保证集成测试真的执行：
+docker run --rm --user 0:0 -e HOME=/tmp -e CONSOLE_TEST_REQUIRE_PHYSICS=1 \
+  -v "$PWD":/work -w /work mujoco-environment-console:local \
+  sh -c 'pip install --quiet httpx pytest jsonschema && python -m pytest -q -rs -p no:cacheprovider'
 
 # 部署（唯一受支持的入口，会生成 .env、构建镜像、等待健康检查）
 bash scripts/deploy.sh
@@ -132,7 +141,9 @@ docker run --rm --user 0:0 -e HOME=/tmp -v "$PWD":/work -w /work mujoco-environm
 - 通用 MJCF 适配器只有基础姿态跟踪奖励，**不等于**研究级任务定义；短 smoke 训练只证明链路可用，**不证明收敛**。
 - 无 `dm_control` / `robosuite` / Playground 原生适配器；无 GPU 训练；无多用户隔离。
 - `sessions` 只在进程内存中，服务重启后全部失效（训练状态则从 `data/runs` 恢复）。
-- 没有「列出当前 viewer 会话」的 API：被浏览器遗弃的会话会占用 `MAX_VIEWERS` 槽位，直到 `SESSION_IDLE_SECONDS` 后由回收线程清理。压测/自动化后请重启容器或等待回收。
+- 没有「列出当前 viewer 会话」的 API：被浏览器遗弃的会话会占用 `MAX_VIEWERS` 槽位，直到 `SESSION_IDLE_SECONDS` 后由回收线程清理。**但已不再持续渲染**（占用约 1.5% CPU，而不是约 500%），因此影响从「资源问题」降级为「槽位问题」。
+- viewer 的 CPU 现在是「除非有人在看，否则几乎为零」。若发现 viewer CPU 很高，先用 `docker compose exec -T console python - <<'PY'` 读取 `/api/sessions/<id>` 中的 `subscribers` / `render` 字段确认是否真有订阅者。
+- trainer 约 2.9 核 / 17 线程（PPO 短训练实测）；与 viewer 并发时容器总量约 4.8 核，宿主仍有约 55% 空闲。容器默认无 CPU/内存上限，需要时可设 `CONSOLE_CPU_LIMIT`/`CONSOLE_MEM_LIMIT`。
 - PPO 实际步数会向上取整到 rollout batch（请求 1000 步可能执行 2048 步），这是预期行为。
 
 ## 11. Definition of Done
@@ -142,6 +153,8 @@ docker run --rm --user 0:0 -e HOME=/tmp -v "$PWD":/work -w /work mujoco-environm
 - [ ] 真实运行验证（不是只读代码或只看 CI 绿灯）。
 - [ ] 新增/修改行为有回归测试，或说明为何无法测试。
 - [ ] `python -m pytest -q` 全绿；涉及环境时 `smoke_test.py --render --all` 全绿。
+- [ ] 涉及 viewer 行为时，同时用真实 API + 真实 MJPEG 订阅验证（`subscribe/unsubscribe` 计数与 `render` 状态），不能只依赖单元测试替身。
+- [ ] 涉及性能/资源结论时，必须给出修改前后的可比较数据（cgroup `cpu.stat` 采样，而不是 `docker stats` 的瞬时值）。
 - [ ] 涉及训练/回放时，PPO 与 SAC 的端到端路径均通过。
 - [ ] 未泄露敏感信息；`git diff` 无无关文件。
 - [ ] README / AGENTS.md / Handoff 与实际行为一致。
