@@ -18,6 +18,7 @@ from app.jobs import JobManager, fingerprint, RUNS
 from app.sessions import SessionManager
 
 STATIC = Path(__file__).parent / 'static'
+MJPEG_BOUNDARY = 'frame'
 PASSWORD = os.getenv('MUJOCO_CONSOLE_PASSWORD', '')
 LOGIN_TTL = 12 * 3600
 COOKIE_SECURE = os.getenv('COOKIE_SECURE', '0').strip().lower() in ('1', 'true', 'yes')
@@ -120,6 +121,21 @@ def badrequest(exc):
     if isinstance(exc, KeyError):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def mjpeg_part(jpeg):
+    """Encode one JPEG as an RFC 2046 multipart body part.
+
+    The part must be terminated by a real CRLF; the delimiter line that follows it is
+    ``--frame``. Emitting an escaped ``b'\\r\\n'`` literal instead of CRLF makes the stream
+    unparseable for spec-conformant clients (ffmpeg, OpenCV, VLC), even though lenient
+    browser MJPEG parsers still recover the frames.
+    """
+    return (
+        b'--' + MJPEG_BOUNDARY.encode()
+        + b'\r\nContent-Type: image/jpeg\r\nContent-Length: '
+        + str(len(jpeg)).encode() + b'\r\n\r\n' + jpeg + b'\r\n'
+    )
 
 
 @app.get('/')
@@ -257,14 +273,13 @@ async def session_stream(sid: str, _: bool = Depends(authenticated)):
             next_seq, jpeg = await asyncio.to_thread(session.wait_frame, seq, 3)
             if next_seq > seq and jpeg:
                 seq = next_seq
-                yield (
-                    b'--frame\r\nContent-Type: image/jpeg\r\nContent-Length: '
-                    + str(len(jpeg)).encode() + b'\r\n\r\n' + jpeg + b'\\r\\n'
-                )
+                yield mjpeg_part(jpeg)
             elif not session.process.is_alive() or session._closed:
                 return
 
-    return StreamingResponse(gen(), media_type='multipart/x-mixed-replace; boundary=frame')
+    return StreamingResponse(
+        gen(), media_type=f'multipart/x-mixed-replace; boundary={MJPEG_BOUNDARY}'
+    )
 
 
 @app.post('/api/training')
