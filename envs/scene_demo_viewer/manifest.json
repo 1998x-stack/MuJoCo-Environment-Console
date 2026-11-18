@@ -1,0 +1,9 @@
+{
+  "kind": "mjcf",
+  "name": "静态道具场景 · 仅演示",
+  "category": "Custom Scene",
+  "xml": "scene.xml",
+  "view_only": true,
+  "frame_skip": 5,
+  "max_episode_steps": 400
+}

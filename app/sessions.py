@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import multiprocessing as mp
+import os
 import queue
 import threading
 import time
@@ -8,30 +9,87 @@ import uuid
 
 from app.worker import run_worker
 
+VIEWER_FPS_DEFAULT = 12
+VIEWER_WIDTH_DEFAULT = 640
+VIEWER_HEIGHT_DEFAULT = 480
+VIEWER_FPS_RANGE = (1, 60)
+VIEWER_SIZE_RANGE = (64, 1920)
+
+
+def _bounded(value, default, low, high):
+    """Parse an env-style string into an int inside [low, high], falling back to the default."""
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return min(high, max(low, parsed))
+
+
+def viewer_config(fps=None, width=None, height=None):
+    """Resolve viewer frame rate and render size from explicit values or the environment."""
+    return {
+        'fps': _bounded(fps if fps is not None else os.getenv('VIEWER_FPS'),
+                        VIEWER_FPS_DEFAULT, *VIEWER_FPS_RANGE),
+        'width': _bounded(width if width is not None else os.getenv('VIEWER_WIDTH'),
+                          VIEWER_WIDTH_DEFAULT, *VIEWER_SIZE_RANGE),
+        'height': _bounded(height if height is not None else os.getenv('VIEWER_HEIGHT'),
+                           VIEWER_HEIGHT_DEFAULT, *VIEWER_SIZE_RANGE),
+    }
+
 
 class ViewerSession:
-    def __init__(self, descriptor, fps=12, width=640, height=480):
+    """One simulation process plus its frame/state plumbing.
+
+    Frames are only produced while at least one consumer is *subscribed*: call
+    :meth:`subscribe` before reading frames (the MJPEG endpoint does this for every connected
+    browser) and :meth:`unsubscribe` when done. Without a subscriber the worker still steps
+    the physics and reports state, but it never creates the software rasteriser, which is what
+    keeps abandoned sessions from consuming whole cores.
+
+    The desired render state is published through the shared ``render_requested`` event rather
+    than a queued command. The event is written under the same lock that updates the subscriber
+    count, so the two can never disagree, and the worker re-reads it every loop, so a missed
+    transition self-corrects instead of being dropped when the command queue is full.
+    """
+
+    def __init__(self, descriptor, fps=12, width=640, height=480, ctx=None):
         self.id = uuid.uuid4().hex
         self.env_id = descriptor['id']
+        self.fps = fps
+        self.width = width
+        self.height = height
         self.created = time.monotonic()
         self.last_seen = self.created
         self._lock = threading.RLock()
         self._changed = threading.Condition(self._lock)
         self._frame = None
         self._frame_seq = 0
-        self._status = {'state': 'starting', 'mode': 'random', 'paused': False, 'steps': 0,
-                        'episodes': 0, 'reward': 0.0, 'error': None}
-        ctx = mp.get_context('spawn')
+        self._subscribers = 0
+        self._status = {'state': 'starting', 'mode': 'random', 'paused': False, 'render': False,
+                        'steps': 0, 'episodes': 0, 'reward': 0.0, 'error': None}
+        ctx = ctx if ctx is not None else mp.get_context('spawn')
+        self.render_requested = ctx.Event()
         self.commands = ctx.Queue(maxsize=16)
         self.frames = ctx.Queue(maxsize=2)
         self.states = ctx.Queue(maxsize=32)
         self.process = ctx.Process(
             target=run_worker,
-            args=(descriptor, self.commands, self.frames, self.states, fps, width, height),
+            args=(descriptor, self.commands, self.frames, self.states,
+                  self.render_requested, fps, width, height),
             daemon=True,
         )
         self._closed = False
-        self.process.start()
+        try:
+            self.process.start()
+        except Exception as exc:            # surface a diagnosable 400 instead of a 500
+            self._closed = True
+            for q in (self.commands, self.frames, self.states):
+                try:
+                    q.close()
+                    q.cancel_join_thread()
+                except (ValueError, OSError):
+                    pass
+            raise ValueError(f'Could not start the simulation worker: {exc}') from exc
         self._reader = threading.Thread(target=self._receive, name='viewer-' + self.id[:8], daemon=True)
         self._reader.start()
 
@@ -67,10 +125,65 @@ class ViewerSession:
     def touch(self):
         self.last_seen = time.monotonic()
 
-    def status(self):
+    def is_active(self):
+        """True while the worker is running and the session has not been closed."""
+        with self._lock:
+            return not self._closed and self.process.is_alive()
+
+    def subscribe(self):
+        """Register a MJPEG client. Rendering is requested from the first subscriber on.
+
+        Returns the resulting subscriber count. A closed session or a worker that is no longer
+        running is never reactivated: the count is returned unchanged and the render request
+        stays off, so a dead session cannot be resurrected by a late client.
+        """
         self.touch()
         with self._lock:
-            return {'id': self.id, 'env_id': self.env_id, 'alive': self.process.is_alive(), **self._status}
+            if not self.is_active():
+                return self._subscribers
+            self._subscribers += 1
+            self.render_requested.set()
+            return self._subscribers
+
+    def unsubscribe(self):
+        """Drop a MJPEG client. The render request is cleared with the last one."""
+        self.touch()
+        with self._lock:
+            self._subscribers = max(0, self._subscribers - 1)
+            if self._subscribers == 0:
+                self.render_requested.clear()
+            return self._subscribers
+
+    def subscribers(self):
+        with self._lock:
+            return self._subscribers
+
+    def info(self):
+        """Public projection of the session state, without refreshing ``last_seen``.
+
+        Excludes the worker traceback (it embeds container-internal paths) and never returns
+        filesystem locations, so it is safe for a monitoring/list endpoint.
+        """
+        with self._lock:
+            public = {k: v for k, v in self._status.items() if k != 'trace'}
+            public.update({
+                'id': self.id, 'env_id': self.env_id, 'alive': self.process.is_alive(),
+                'closed': self._closed, 'subscribers': self._subscribers,
+                'render_requested': self.render_requested.is_set(),
+                'created': self.created, 'last_seen': self.last_seen,
+                'idle_seconds': round(time.monotonic() - self.last_seen, 1),
+                'fps': self.fps, 'width': self.width, 'height': self.height})
+            return public
+
+    def status(self):
+        """Heartbeat used by the UI poll: refreshes ``last_seen`` and keeps the traceback."""
+        self.touch()
+        info = self.info()
+        with self._lock:
+            trace = self._status.get('trace')
+        if trace:
+            info['trace'] = trace
+        return info
 
     def command(self, cmd):
         self.touch()
@@ -95,6 +208,8 @@ class ViewerSession:
             if self._closed:
                 return
             self._closed = True
+            self._subscribers = 0
+            self.render_requested.clear()
             self._changed.notify_all()
         try:
             self.commands.put_nowait({'op': 'stop'})
@@ -121,10 +236,11 @@ class ViewerSession:
 
 
 class SessionManager:
-    def __init__(self, limit=4, idle_seconds=900):
+    def __init__(self, limit=4, idle_seconds=900, fps=None, width=None, height=None):
         self.sessions = {}
         self.limit = max(1, int(limit))
         self.idle_seconds = max(1, int(idle_seconds))
+        self.viewer = viewer_config(fps, width, height)
         self.lock = threading.RLock()
         self._stop_event = threading.Event()
         self._reaper = None
@@ -165,7 +281,7 @@ class SessionManager:
         with self.lock:
             if len(self.sessions) >= self.limit:
                 raise ValueError(f'Viewer limit reached ({self.limit}); stop an existing session')
-            session = ViewerSession(descriptor)
+            session = ViewerSession(descriptor, **self.viewer)
             self.sessions[session.id] = session
             return session
 
@@ -182,6 +298,12 @@ class SessionManager:
             session = self.sessions.pop(sid, None)
         if session is not None:
             session.close()
+
+    def list(self):
+        """Snapshot every live session without refreshing their idle timer."""
+        with self.lock:
+            sessions = list(self.sessions.values())
+        return [session.info() for session in sessions]
 
     def stop_all(self):
         self._stop_event.set()

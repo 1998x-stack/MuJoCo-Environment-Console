@@ -27,7 +27,17 @@ envs/my_robot/
 
 注意：`target_qpos` 的长度必须等于模型的 `nq`，不能简单按电机数量填写。缺省取模型 `qpos0`。`init_qpos` 也必须有 `nq` 个元素，缺省取模型 `qpos0`。单纯的姿态跟踪奖励不适合所有机器人；接触控制和复杂任务应自行编写 Gymnasium Env。没有执行器的模型需要 `"view_only": true`，只允许查看，不允许训练。
 
-使用 `<include file="..."/>` 或网格时，把所有依赖放在该目录，保持相对路径完整。
+使用 `<include file="..."/>` 或网格时，把所有依赖放在该目录，保持相对路径完整。`<include>` 引用的文件应与入口 XML 位于同一环境目录下，网格与纹理放在 `assets/` 子目录；MuJoCo 的 `meshdir` 默认以入口 XML 所在目录为基准，因此 `file="assets/x.stl"` 在 included 文件中同样有效。二进制 STL 可直接加载；ASCII STL 在 MuJoCo 3.3.7 中会报 `number of faces should be between 1 and 200000`，请使用二进制 STL 或 `.obj`。
+
+仓库自带两个可直接参考/复制的示例：
+
+| 目录 | 说明 | 覆盖能力 |
+|---|---|---|
+| `envs/custom_pendulum/` | 单关节摆目标跟踪（1 自由度，1 执行器） | 最小 MJCF 可训练环境 |
+| `envs/custom_double_pendulum/` | 双关节摆，入口 `scene.xml` 通过 `<include>` 引入 `links.xml`，并使用 `assets/tip.stl` | include、mesh 相对路径、多自由度观测/动作 |
+| `envs/scene_demo_viewer/` | 静态道具场景，`view_only: true`，无执行器 | 仅演示环境分类与训练拒绝路径 |
+
+`view_only` 环境在目录 API 中 `trainable` 为 `false`，界面显示「仅演示」，`POST /api/training` 会返回 400。
 
 ## 方式 B：挂载 Gymnasium 环境注册代码
 

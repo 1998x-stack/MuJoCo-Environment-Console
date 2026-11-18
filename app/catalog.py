@@ -1,4 +1,10 @@
-"""Local, allowlisted environment registry. No arbitrary remote code execution."""
+"""Local, allowlisted environment registry. No arbitrary remote code execution.
+
+Discovery is deliberately fault-tolerant: a broken environment directory must never stop the
+console from starting. Instead of silently dropping bad folders, ``scan()`` returns
+``(entries, problems)`` where every skipped or degraded environment carries a machine-readable
+``reason`` and a human-readable ``detail`` that the API and the UI surface to the operator.
+"""
 from __future__ import annotations
 import importlib.util
 import json
@@ -7,7 +13,9 @@ import re
 from pathlib import Path
 
 ENV_ROOT = Path(os.getenv('CONSOLE_ENV_ROOT', './envs')).resolve()
+SCHEMA_PATH = Path(__file__).resolve().parent.parent / 'schemas/environment.schema.json'
 SAFE = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
+MODULE = re.compile(r'[A-Za-z_][\w.]*(?<!\.)')
 
 NAMES = [
     ('InvertedPendulum', '倒立摆', 'Control'),
@@ -29,6 +37,44 @@ FETCH = [
     ('FetchPickAndPlace-v4', '机械臂抓取放置'),
 ]
 
+_schema_validator = None
+_schema_loaded_for = None
+_schema_error = None
+
+
+def _validator():
+    """Schema validator, or None when the schema file or ``jsonschema`` package is unavailable.
+
+    The cache is keyed on the schema path, not on a one-shot flag: a validator built for a
+    different path must never be reused, otherwise a single failed load (missing file, or a
+    caller pointing at another schema) would disable validation for the rest of the process.
+    """
+    global _schema_validator, _schema_loaded_for, _schema_error
+    key = str(SCHEMA_PATH)
+    if _schema_loaded_for != key:
+        _schema_loaded_for = key
+        try:
+            import jsonschema
+            schema = json.loads(SCHEMA_PATH.read_text(encoding='utf8'))
+            _schema_validator = jsonschema.Draft202012Validator(schema)
+            _schema_error = None
+        except (ImportError, OSError, ValueError, TypeError) as exc:
+            _schema_validator = None
+            _schema_error = f'{type(exc).__name__}: {exc}'
+    return _schema_validator
+
+
+def schema_status():
+    """Whether runtime manifest validation is active, and why not when it is not.
+
+    Validation used to fail closed and silent: if the schema file was missing (for example
+    because the image did not ship ``schemas/``) every manifest was accepted and the API still
+    reported "0 problems". Callers can now surface this instead of pretending all is well.
+    """
+    return {'available': _validator() is not None, 'path': str(SCHEMA_PATH),
+            'reason': _schema_error}
+
+
 def _module_available(name):
     if not name:
         return True
@@ -48,50 +94,124 @@ def _entry(key, name, category, library, gym_id=None, module=None, **other):
             'registration_module': module, 'installed': installed, **other}
 
 
-def discover():
+def _problem(env_id, reason, detail, severity='error'):
+    return {'id': env_id, 'reason': reason, 'detail': detail, 'severity': severity}
+
+
+def _read_manifest(folder, env_id, problems):
+    """Return (config, fatal). Records a problem and returns fatal=True when unusable."""
+    manifest = folder / 'manifest.json'
+    if manifest.is_symlink():
+        problems.append(_problem(env_id, 'manifest_is_symlink',
+                                 'manifest.json must be a regular file inside the environment'))
+        return None, True
+    if not manifest.is_file():
+        problems.append(_problem(env_id, 'missing_manifest',
+                                 'no manifest.json in this directory; add one to register it'))
+        return None, True
+    try:
+        config = json.loads(manifest.read_text(encoding='utf8'))
+    except (OSError, ValueError) as exc:
+        problems.append(_problem(env_id, 'invalid_manifest_json', f'{type(exc).__name__}: {exc}'))
+        return None, True
+    if not isinstance(config, dict):
+        problems.append(_problem(env_id, 'manifest_not_an_object',
+                                 f'manifest.json must contain a JSON object, got {type(config).__name__}'))
+        return None, True
+    return config, False
+
+
+def _schema_warnings(config, env_id, problems):
+    validator = _validator()
+    if validator is None:
+        return
+    for error in sorted(validator.iter_errors(config), key=lambda e: list(e.path)):
+        location = '/'.join(str(part) for part in error.path) or '<root>'
+        problems.append(_problem(env_id, 'schema_violation',
+                                 f'{location}: {error.message}', severity='warning'))
+
+
+def _scan_mjcf(folder, env_id, config, problems):
+    xml = config.get('xml', 'model.xml')
+    if not isinstance(xml, str) or not xml.endswith('.xml'):
+        problems.append(_problem(env_id, 'invalid_xml_field',
+                                 f'"xml" must be a string ending in .xml, got {xml!r}'))
+        return None
+    path = (folder / xml).resolve()
+    if not path.is_relative_to(folder.resolve()):
+        problems.append(_problem(env_id, 'xml_outside_environment',
+                                 f'"{xml}" resolves outside {folder.name}; keep assets inside the folder'))
+        return None
+    if not path.is_file():
+        problems.append(_problem(env_id, 'xml_missing',
+                                 f'"{xml}" does not exist (looked for {path.name} inside {folder.name})'))
+        return None
+    return _entry(env_id, str(config.get('name', folder.name))[:80],
+                  str(config.get('category', 'Custom'))[:40], 'Local MJCF',
+                  xml_path=str(path), params=config,
+                  trainable=not bool(config.get('view_only', False)))
+
+
+def _scan_gym(folder, env_id, config, problems):
+    gym_id = config.get('gym_id')
+    module = config.get('registration_module')
+    if not isinstance(gym_id, str) or not gym_id or len(gym_id) > 128:
+        problems.append(_problem(env_id, 'invalid_gym_id',
+                                 f'"gym_id" must be a non-empty string of at most 128 chars, got {gym_id!r}'))
+        return None
+    if module is not None and (not isinstance(module, str) or not MODULE.fullmatch(module)):
+        problems.append(_problem(env_id, 'invalid_registration_module',
+                                 f'"registration_module" must be a python module name, got {module!r}'))
+        return None
+    return _entry(env_id, str(config.get('name', folder.name))[:80],
+                  str(config.get('category', 'Custom'))[:40], 'External Gymnasium',
+                  gym_id, module)
+
+
+def scan(env_root=None):
+    """Discover environments. Returns ``(entries, problems)`` and never raises."""
+    root = Path(env_root).resolve() if env_root is not None else ENV_ROOT
     entries = [_entry(f'gym:{name}-v5', name_cn, cat, 'Gymnasium MuJoCo', f'{name}-v5')
                for name, name_cn, cat in NAMES]
     entries += [_entry(f'fetch:{gym_id}', name_cn, 'Fetch Robotics', 'Gymnasium Robotics',
                        gym_id, 'gymnasium_robotics') for gym_id, name_cn in FETCH]
-    if ENV_ROOT.is_dir():
-        for folder in sorted(ENV_ROOT.iterdir()):
-            if not folder.is_dir() or not SAFE.fullmatch(folder.name):
+    problems = []
+    if not root.is_dir():
+        return entries, problems
+
+    for folder in sorted(root.iterdir()):
+        if not folder.is_dir():
+            continue
+        env_id = f'custom:{folder.name}'
+        if not SAFE.fullmatch(folder.name):
+            problems.append(_problem(env_id, 'invalid_directory_name',
+                                     'directory names must match [a-zA-Z0-9_-]{1,64}'))
+            continue
+        try:
+            config, fatal = _read_manifest(folder, env_id, problems)
+            if fatal:
                 continue
-            manifest = folder / 'manifest.json'
-            if not manifest.is_file() or manifest.is_symlink():
-                continue
-            try:
-                config = json.loads(manifest.read_text(encoding='utf8'))
-                if not isinstance(config, dict):
-                    continue
-                kind = config.get('kind', 'mjcf')
-                if kind == 'mjcf':
-                    xml = config.get('xml', 'model.xml')
-                    if not isinstance(xml, str) or not xml.endswith('.xml'):
-                        continue
-                    path = (folder / xml).resolve()
-                    if not path.is_relative_to(folder.resolve()) or not path.is_file():
-                        continue
-                    entry = _entry(f'custom:{folder.name}', str(config.get('name', folder.name))[:80],
-                                   str(config.get('category', 'Custom'))[:40], 'Local MJCF',
-                                   xml_path=str(path), params=config, trainable=not bool(config.get('view_only', False)))
-                elif kind == 'gym':
-                    gym_id = config.get('gym_id')
-                    module = config.get('registration_module')
-                    if not isinstance(gym_id, str) or not gym_id or len(gym_id) > 128:
-                        continue
-                    if module is not None and (not isinstance(module, str) or
-                            not re.fullmatch(r'[A-Za-z_][\w.]*(?<!\.)', module)):
-                        continue
-                    entry = _entry(f'custom:{folder.name}', str(config.get('name', folder.name))[:80],
-                                   str(config.get('category', 'Custom'))[:40], 'External Gymnasium',
-                                   gym_id, module)
-                else:
-                    continue
+            _schema_warnings(config, env_id, problems)
+            kind = config.get('kind', 'mjcf')
+            if kind == 'mjcf':
+                entry = _scan_mjcf(folder, env_id, config, problems)
+            elif kind == 'gym':
+                entry = _scan_gym(folder, env_id, config, problems)
+            else:
+                problems.append(_problem(env_id, 'unsupported_kind',
+                                         f'"kind" must be "mjcf" or "gym", got {kind!r}'))
+                entry = None
+            if entry is not None:
                 entries.append(entry)
-            except (OSError, ValueError, TypeError):
-                continue
-    return entries
+        except Exception as exc:                       # never let one folder break discovery
+            problems.append(_problem(env_id, 'internal_error',
+                                     f'{type(exc).__name__}: {exc}'))
+            continue
+    return entries, problems
+
+
+def discover():
+    return scan()[0]
 
 
 def get_env(env_id):

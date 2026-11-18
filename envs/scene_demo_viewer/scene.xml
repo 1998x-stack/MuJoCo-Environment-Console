@@ -1,0 +1,18 @@
+<mujoco model="static scene demo">
+  <compiler angle="radian"/>
+  <option timestep="0.01" gravity="0 0 -9.81"/>
+  <visual><global offwidth="640" offheight="480"/></visual>
+  <include file="props.xml"/>
+  <worldbody>
+    <light pos="0 -3 3.5" dir="0 0 -1" diffuse="0.85 0.85 0.85"/>
+    <camera name="overview" pos="2.4 -3.0 1.7" xyaxes="0.78 0.62 0 -0.25 0.32 0.91"/>
+    <geom name="floor" type="plane" size="3 3 0.1" rgba="0.12 0.17 0.25 1"/>
+    <body name="prop" pos="0 0 1.1">
+      <joint name="prop_hinge" type="hinge" axis="0 1 0" damping="0.6" limited="true" range="-2 2"/>
+      <geom name="prop_mesh_geom" type="mesh" mesh="prop_mesh" rgba="0.55 0.80 0.95 1" mass="0.6"/>
+    </body>
+    <body name="pillar" pos="0.9 0.4 0.3">
+      <geom name="pillar_geom" type="box" size="0.08 0.08 0.3" rgba="0.85 0.70 0.30 1" mass="1.0"/>
+    </body>
+  </worldbody>
+</mujoco>

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 import asyncio
+import logging
 import os
 import secrets
 import threading
@@ -13,11 +14,13 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.catalog import discover, get_env
+from app.catalog import get_env, scan, schema_status
 from app.jobs import JobManager, fingerprint, RUNS
 from app.sessions import SessionManager
 
 STATIC = Path(__file__).parent / 'static'
+MJPEG_BOUNDARY = 'frame'
+logger = logging.getLogger('mujoco-console')
 PASSWORD = os.getenv('MUJOCO_CONSOLE_PASSWORD', '')
 LOGIN_TTL = 12 * 3600
 COOKIE_SECURE = os.getenv('COOKIE_SECURE', '0').strip().lower() in ('1', 'true', 'yes')
@@ -29,6 +32,9 @@ AUTH_LOCK = threading.RLock()
 manager = SessionManager(
     limit=int(os.getenv('MAX_VIEWERS', '3')),
     idle_seconds=int(os.getenv('SESSION_IDLE_SECONDS', '900')),
+    fps=os.getenv('VIEWER_FPS'),
+    width=os.getenv('VIEWER_WIDTH'),
+    height=os.getenv('VIEWER_HEIGHT'),
 )
 jobs = JobManager()
 
@@ -37,6 +43,20 @@ jobs = JobManager()
 async def lifespan(_app):
     jobs.start_accepting()
     manager.start_reaper()
+    # Report unusable environment folders without refusing to start: a broken custom
+    # environment must never take the console down.
+    _entries, problems = scan()
+    for problem in problems:
+        logger.warning('environment %s [%s/%s] %s', problem['id'], problem['severity'],
+                       problem['reason'], problem['detail'])
+    # A missing schema used to look exactly like a clean catalog. Say so at startup instead.
+    schema = schema_status()
+    if not schema['available']:
+        logger.warning('manifest schema validation is DISABLED (%s: %s); '
+                       'environment manifests are accepted unchecked',
+                       schema['path'], schema['reason'])
+    else:
+        logger.info('manifest schema validation active: %s', schema['path'])
     try:
         yield
     finally:
@@ -122,6 +142,21 @@ def badrequest(exc):
     raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+def mjpeg_part(jpeg):
+    """Encode one JPEG as an RFC 2046 multipart body part.
+
+    The part must be terminated by a real CRLF; the delimiter line that follows it is
+    ``--frame``. Emitting an escaped ``b'\\r\\n'`` literal instead of CRLF makes the stream
+    unparseable for spec-conformant clients (ffmpeg, OpenCV, VLC), even though lenient
+    browser MJPEG parsers still recover the frames.
+    """
+    return (
+        b'--' + MJPEG_BOUNDARY.encode()
+        + b'\r\nContent-Type: image/jpeg\r\nContent-Length: '
+        + str(len(jpeg)).encode() + b'\r\n\r\n' + jpeg + b'\r\n'
+    )
+
+
 @app.get('/')
 def root():
     return FileResponse(STATIC / 'index.html')
@@ -182,7 +217,26 @@ def me(_: bool = Depends(authenticated)):
 
 @app.get('/api/catalog')
 def catalog(_: bool = Depends(authenticated)):
-    return {'environments': discover()}
+    """Shipped environments plus diagnosable problems.
+
+    ``schema`` states whether runtime manifest validation is actually active: a missing schema
+    file used to be indistinguishable from a clean catalog (both reported zero problems).
+    """
+    environments, problems = scan()
+    return {'environments': environments, 'problems': problems, 'schema': schema_status()}
+
+
+@app.get('/api/sessions')
+def session_list(_: bool = Depends(authenticated)):
+    """Read-only inventory of live viewer sessions.
+
+    Returns the public projection only: no tokens, no cookies, no filesystem paths, no worker
+    traceback. It deliberately does not touch ``last_seen``, so polling this endpoint can never
+    keep an abandoned session (and its worker process) alive.
+    """
+    return {'sessions': manager.list(), 'limit': manager.limit,
+            'idle_seconds': manager.idle_seconds,
+            'viewer': manager.viewer}
 
 
 @app.post('/api/sessions')
@@ -250,21 +304,30 @@ async def session_stream(sid: str, _: bool = Depends(authenticated)):
         session = manager.get(sid)
     except KeyError as exc:
         badrequest(exc)
+    if not session.is_active():
+        # Fail fast instead of handing the browser an empty stream it would wait on forever.
+        raise HTTPException(status_code=409, detail='Simulation worker is not running')
 
     async def gen():
         seq = 0
-        while True:
-            next_seq, jpeg = await asyncio.to_thread(session.wait_frame, seq, 3)
-            if next_seq > seq and jpeg:
-                seq = next_seq
-                yield (
-                    b'--frame\r\nContent-Type: image/jpeg\r\nContent-Length: '
-                    + str(len(jpeg)).encode() + b'\r\n\r\n' + jpeg + b'\\r\\n'
-                )
-            elif not session.process.is_alive() or session._closed:
-                return
+        # Rendering is only enabled while at least one MJPEG client is attached; a session
+        # whose browser went away must not keep a software rasteriser busy. subscribe() is a
+        # no-op on a session that closed in the meantime, so a late client cannot revive it.
+        session.subscribe()
+        try:
+            while True:
+                next_seq, jpeg = await asyncio.to_thread(session.wait_frame, seq, 3)
+                if next_seq > seq and jpeg:
+                    seq = next_seq
+                    yield mjpeg_part(jpeg)
+                elif not session.process.is_alive() or session._closed:
+                    return
+        finally:
+            session.unsubscribe()
 
-    return StreamingResponse(gen(), media_type='multipart/x-mixed-replace; boundary=frame')
+    return StreamingResponse(
+        gen(), media_type=f'multipart/x-mixed-replace; boundary={MJPEG_BOUNDARY}'
+    )
 
 
 @app.post('/api/training')

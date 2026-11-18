@@ -54,6 +54,20 @@ def read_json(path):
     return json.loads(Path(path).read_text(encoding='utf8'))
 
 
+def exit_reason(code):
+    """Explain how a trainer process ended, including container-level kills."""
+    if code is None:
+        return 'Trainer exited unexpectedly'
+    if code in (-9, 137):
+        return ('Trainer was killed (exit code 137/SIGKILL) — usually the container memory '
+                'limit, an external docker stop/kill, or the host running out of memory')
+    if code in (-15, 143):
+        return 'Trainer was terminated (exit code 143/SIGTERM)'
+    if code < 0:
+        return f'Trainer was killed by signal {-code}'
+    return f'Trainer exited unexpectedly (exit code {code})'
+
+
 def terminate_process_group(pgid, grace_seconds=4):
     """Terminate the detached trainer process group, escalating if it ignores SIGTERM."""
     try:
@@ -112,8 +126,7 @@ class JobManager:
         try:
             info = self.get(run_id)
             if info.get('status') in ACTIVE:
-                info.update({'status': 'failed',
-                             'error': f'Trainer exited unexpectedly (exit code {code})',
+                info.update({'status': 'failed', 'error': exit_reason(code),
                              'finished': _now()})
                 write_json(RUNS / run_id / 'status.json', info)
         except (KeyError, OSError, ValueError):

@@ -1,0 +1,144 @@
+{
+  "run_id": "20261118-085244-8f3e435",
+  "timestamp": "2026-11-18T10:45:00Z",
+  "agent": "pi (concurrency reliability + CI exit codes / round 3)",
+  "repo": "1998x-stack/MuJoCo-Environment-Console",
+  "sha_taxonomy": {
+    "base_sha": "8f3e435816572c0db5fabc4880095ca47fc0412a",
+    "code_sha": "e042d66",
+    "pr_head_sha": "11466c63c73ae09f58bb7cb40bae9c2f70c0c4ed",
+    "validated_sha": "e042d66",
+    "ci_run_id": "44285265993",
+    "note": "code_sha is the newest commit touching app/, scripts/, tests/, .github/, Dockerfile, .dockerignore; docs/handoff commits follow it. Derive with scripts/handoff_metadata.py. pr_head_sha here is the documentation commit that follows code_sha; the code state it records is validated_sha."
+  },
+  "remote_main_sha_at_start": "f64bc8f5319754e3228bf626804ba408518c5171",
+  "pr": "https://github.com/1998x-stack/MuJoCo-Environment-Console/pull/1",
+  "branch": "agent/local-deploy-20261118-1058",
+  "ci_runs": [
+    {
+      "run_id": "44284580092",
+      "head_sha": "5cf87de",
+      "result": "failure",
+      "reason": "scripts/handoff_metadata.py assumed origin/main exists; actions/checkout fetches a single ref. Fixed forward in e042d66."
+    },
+    {
+      "run_id": "44285265993",
+      "head_sha": "e042d66",
+      "result": "success"
+    }
+  ],
+  "host_type": "physical-ubuntu-server",
+  "os": "Ubuntu 24.04.3 LTS (noble)",
+  "kernel": "7.0.0-38-generic",
+  "architecture": "x86_64",
+  "cpu_model": "Intel(R) Core(TM) i5-10500 CPU @ 3.10GHz",
+  "cpu_cores": 6,
+  "cpu_threads": 12,
+  "memory_gib": 31,
+  "docker_version": "29.1.3",
+  "compose_version": "2.40.3",
+  "console_port": 8010,
+  "port_8000_owner": "other project (untouched)",
+  "host_containers_total": 27,
+  "image_id": "sha256:e2825371e48eb1100f6d3452a9aa72198bbafbebae77bc95bd43005201f4d31f",
+  "image_size_bytes": 456633733,
+  "container_status": "Up (healthy) 0.0.0.0:8010->8000/tcp",
+  "data_runs": {
+    "count": 45,
+    "size": "5.1M",
+    "deleted": false
+  },
+  "environment_tests_passed": 18,
+  "environment_tests_total": 18,
+  "unit_tests_strict": "93 passed, 0 skipped",
+  "unit_tests_full_image_non_strict": "92 passed, 1 skipped",
+  "unit_tests_lightweight": "88 passed, 5 skipped (CI job 1, no numpy/MuJoCo)",
+  "browser_assertions": {
+    "main_flow": "31/31",
+    "new_env_and_replay": "18/18",
+    "total": 49
+  },
+  "subscription_race": {
+    "before": "render leak (subscribers=0, last request True), frozen stream (subscribers=1, last request False), toggle lost on full queue",
+    "after": "storm 8 threads x 400 ops -> 0 invariant violations; subscribe->True / last unsubscribe->False; full queue -> DELIVERED",
+    "evidence": [
+      "race-before.log",
+      "race-after.log",
+      "race-tests-round3.log"
+    ]
+  },
+  "cpu_core_percent_mean": {
+    "no_session": 0.1,
+    "one_subscriber_streaming": 169.5,
+    "after_disconnect_session_alive": 1.6,
+    "after_disconnect_frozen_build": 1.7,
+    "container_idle_l5": 0.17
+  },
+  "mjpeg_framing": {
+    "multipart_parts_with_jpeg_header": 212,
+    "decoded_frames": 211,
+    "parts_ending_with_literal_backslash_r_backslash_n": 0,
+    "frame_shapes": [
+      [
+        480,
+        640,
+        3
+      ]
+    ],
+    "frames_that_changed": 210,
+    "ffmpeg_file_frames": 60,
+    "ffmpeg_live_frames": 60,
+    "opencv_frames": 60
+  },
+  "training": {
+    "ppo": {
+      "requested_steps": 1000,
+      "actual_steps": 2048,
+      "eval_returns": [
+        28.0,
+        30.0,
+        28.0
+      ],
+      "checkpoint": "saved and validated",
+      "isolated_replay": "passed"
+    },
+    "sac": {
+      "requested_steps": 1000,
+      "actual_steps": 1000,
+      "eval_returns": [
+        58.0,
+        62.0,
+        64.0
+      ],
+      "checkpoint": "saved and validated",
+      "isolated_replay": "passed"
+    }
+  },
+  "ci_gate_verification": {
+    "pipeline_without_pipefail": "rc=0 (failure hidden)",
+    "pipeline_with_pipefail": "rc=1 (failure propagated)",
+    "deliberate_failure": "pytest rc=1, checker rc=1",
+    "deliberate_skip": "pytest rc=0, checker rc=1 (rejected)",
+    "collection_error": "rc=2",
+    "timeout": "rc=124",
+    "clean_run": "rc=0, strict suite OK"
+  },
+  "not_run": [
+    "hour-scale stability (unauthorised; 27 co-tenant containers)",
+    "full-load stress (same)",
+    "third-party LAN device browser acceptance (no device; ffmpeg/OpenCV used as third-party clients)",
+    "PPO convergence study (needs authorisation/compute)",
+    "Menagerie import (GB-scale clone)"
+  ],
+  "evidence_dir": ".artifacts/runs/20261118-085244-8f3e435/",
+  "git_worktree_clean": true,
+  "ci_summary": {
+    "job_steps": 24,
+    "lightweight_unit_tests": "88 passed, 5 skipped",
+    "strict_suite": "junit: 93 tests, 0 failures, 0 errors, 0 skipped / strict suite OK: 93 passed, 0 failed, 0 errors, 0 skipped",
+    "image_manifest_schema": "image manifest schema OK: /app/schemas/environment.schema.json",
+    "manifests_valid": "3/3 manifests valid (runner and inside the image)",
+    "mjpeg_framing": "MJPEG framing OK: 54 CRLF-delimited boundaries",
+    "environments": "18/18 environments passed"
+  }
+}
