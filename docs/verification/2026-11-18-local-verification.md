@@ -199,4 +199,4 @@
 - **GPU / CUDA**：`NOT_RUN`（本项目为 CPU-first，且未要求）。
 - **Menagerie 导入流程** `scripts/import_menagerie.sh`：`NOT_RUN`（需克隆约 GB 级仓库；
   其 `view_only` 路径已由本轮新增的 `custom:scene_demo_viewer` 等价覆盖）。
-- **GitHub Actions**：本轮推送后由 CI 实测，结果记录在 `latest.md`。
+- **GitHub Actions**：已实测 **success**（[run 44235254442](https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44235254442)，2m36s）。日志确认新增步骤真实执行：`Validate shipped environment manifests against the schema` → `3/3 manifests valid`；`Verify authenticated API and MJPEG viewer` → `MJPEG framing OK: 56 CRLF-delimited boundaries`、`Catalog OK: 18 discovered environments`；`18/18 environments passed`；单元测试 `19 passed, 4 skipped`。

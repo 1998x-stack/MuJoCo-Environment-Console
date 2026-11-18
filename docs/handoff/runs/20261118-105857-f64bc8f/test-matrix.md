@@ -59,7 +59,7 @@
 | L5 | 满负载压力测试 | 同上 | **NOT_RUN** | — |
 | — | GPU / CUDA 路径 | 项目为 CPU-first，且未要求 | **NOT_RUN** | — |
 | — | Menagerie 导入脚本 | 需克隆 GB 级仓库 | **NOT_RUN** | — |
-| — | GitHub Actions | 推送后由 CI 实测 | PENDING | `latest.md` |
+| — | GitHub Actions | [run 44235254442](https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44235254442) | PASS (2m36s) | CI 日志：`19 passed, 4 skipped`、`3/3 manifests valid`、`MJPEG framing OK: 56 CRLF-delimited boundaries`、`18/18 environments passed` |
 
 ## 关键对照实验（修复有效性）
 

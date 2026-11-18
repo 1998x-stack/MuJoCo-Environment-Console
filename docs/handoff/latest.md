@@ -2,16 +2,16 @@
 
 ## Metadata
 
-- Timestamp: 2026-11-18T03:5x:xxZ (UTC)
+- Timestamp: 2026-11-18T04:13:37Z (UTC)
 - Agent: Pi (MuJoCo Environment Console local deploy / verify / fix agent)
 - Host type: Ubuntu 24.04.3 LTS 物理服务器（本机执行，非容器、非 macOS）
 - OS: Ubuntu 24.04.3 LTS (noble), kernel 7.0.0-38-generic, x86_64
 - Base SHA: `f64bc8f5319754e3228bf626804ba408518c5171`
-- Final local SHA: `PENDING_COMMIT`（见 `runs/20261118-105857-f64bc8f/changes.md`）
+- Final local SHA: `3f3ccb3f9cde03c967662d6486ac1578447eb2e3`（代码 tip；其后仅文档元数据提交）
 - Remote main SHA: `f64bc8f5319754e3228bf626804ba408518c5171`（本轮开始时 = BASE_SHA，远端无新提交）
 - Branch: `agent/local-deploy-20261118-1058`
-- PR: `PENDING`
-- CI run: `PENDING`（推送后填写）
+- PR: https://github.com/1998x-stack/MuJoCo-Environment-Console/pull/1
+- CI run: https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44235254442 — **success**（2m36s）
 
 ## Current State
 
@@ -30,6 +30,7 @@
 | Session cleanup | **PASS** | 空闲回收（20 s 实例验证）、viewer 上限、无进程累积 |
 | Restart / Persistence | **PASS** | 训练中重启 → `interrupted` 且进程组被清理；4 条历史 run 完整保留 |
 | Resource tests | **PARTIAL** | 有界测试全通过；小时级/满负载 **NOT_RUN** |
+| CI (GitHub Actions) | **PASS** | run 44235254442 success；新增的 schema 校验与 MJPEG 分帧断言均实测执行 |
 
 ## Completed Work
 
@@ -118,12 +119,13 @@ docs/handoff/**                               新增：Handoff 体系与本轮�
 3. 新增的 `custom_double_pendulum` 目标为 `[0,0]`（垂直下垂），初始位姿偏离后回报下降；
    这是演示环境，不是有研究意义的任务定义。
 4. 本机 `SESSION_IDLE_SECONDS` 相关的会话占用风险仅在自动化场景显现，人工使用无影响。
-5. GitHub Actions 结果尚未确认（推送后需回填）。
+5. ~~GitHub Actions 结果尚未确认~~ → 已确认 **success**（run 44235254442）。CI 首次运行曾失败一次：本 Agent 在 `tests/test_integration.py` 顶层 `import numpy`，而 CI 轻量依赖集不含 numpy，导致 pytest **收集阶段**报错；改为 `pytest.importorskip('numpy')` 后通过（本地用 `python:3.12-slim` + 同款依赖复现验证）。
 
 ## Exact Next Steps
 
-1. 回填 `Final local SHA`、`PR`、`CI run` 三项，确认 CI 全绿（尤其新增的 MJPEG 分帧断言与
-   manifest schema 校验在 CI 中真实执行）。
+1. ~~回填 `Final local SHA`、`PR`、`CI run`，确认 CI 全绿~~ → **已完成**：CI success，
+   日志确认 `3/3 manifests valid`、`MJPEG framing OK: 56 CRLF-delimited boundaries`、
+   `Catalog OK: 18 discovered environments`、`18/18 environments passed`。
 2. 用 `ffmpeg` 或 `cv2.VideoCapture` 抓取 `/api/sessions/<id>/stream`，作为 MJPEG 修复的第三方实测。
 3. 处理 MJC-P3-005：为非 API 客户端提供会话枚举/清理能力（例如只读的 `GET /api/sessions`
    或容器启动时清理孤儿会话）。

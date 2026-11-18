@@ -4,7 +4,15 @@
 
 ---
 
-## NS-1（P0 流程）确认 CI 全绿并回填 Handoff 元数据
+## NS-1（P0 流程）~~确认 CI 全绿并回填 Handoff 元数据~~ — **本轮已完成**
+
+- 结果：CI [run 44235254442](https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44235254442)
+  **success**（2m36s）。元数据已回填至 `latest.md`、`environment.json`、`changes.md`、`test-matrix.md`。
+- 注意：CI 首次运行**曾失败**——`tests/test_integration.py` 顶层 `import numpy` 使 pytest 在
+  **收集阶段**报错（CI 轻量依赖集不含 numpy）。已改为 `pytest.importorskip('numpy')`。
+  下轮新增测试时请沿用「重依赖一律 importorskip」的写法，否则会让 CI 在收集阶段直接失败。
+
+### 原始目标（供追溯）
 
 - 依赖：本轮 PR 推送成功。
 - 动作：

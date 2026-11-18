@@ -3,11 +3,11 @@
   "agent": "pi (local deploy / verify / fix)",
   "repo": "1998x-stack/MuJoCo-Environment-Console",
   "base_sha": "f64bc8f5319754e3228bf626804ba408518c5171",
-  "final_sha": "PENDING_COMMIT",
+  "final_sha": "3f3ccb3f9cde03c967662d6486ac1578447eb2e3",
   "remote_main_sha_at_start": "f64bc8f5319754e3228bf626804ba408518c5171",
   "branch": "agent/local-deploy-20261118-1058",
-  "pr": "PENDING",
-  "ci_run": "PENDING",
+  "pr": "https://github.com/1998x-stack/MuJoCo-Environment-Console/pull/1",
+  "ci_run": "https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44235254442",
   "host_type": "physical-ubuntu-server",
   "os": "Ubuntu 24.04.3 LTS (noble)",
   "kernel": "7.0.0-38-generic",
@@ -15,7 +15,12 @@
   "cpu_model": "Intel(R) Core(TM) i5-10500 CPU @ 3.10GHz",
   "cpu_cores": 6,
   "cpu_threads": 12,
-  "cpu_features": ["avx", "avx2", "fma", "no-avx512"],
+  "cpu_features": [
+    "avx",
+    "avx2",
+    "fma",
+    "no-avx512"
+  ],
   "memory_gib": 31,
   "swap_gib": 8,
   "disk_total_gib": 735,
@@ -52,14 +57,22 @@
     "status": "PASS",
     "requested_steps": 1000,
     "actual_steps": 2048,
-    "eval_returns": [28.0, 30.0, 28.0],
+    "eval_returns": [
+      28.0,
+      30.0,
+      28.0
+    ],
     "checkpoint_and_isolated_replay": "PASS"
   },
   "sac": {
     "status": "PASS",
     "requested_steps": 1000,
     "actual_steps": 1000,
-    "eval_returns": [58.0, 62.0, 64.0],
+    "eval_returns": [
+      58.0,
+      62.0,
+      64.0
+    ],
     "checkpoint_and_isolated_replay": "PASS"
   },
   "new_environment_training": {
@@ -67,7 +80,11 @@
     "algorithm": "PPO",
     "requested_steps": 1000,
     "actual_steps": 2048,
-    "eval_returns": [382.5223809053355, 382.5223809053355, 382.5223809053355],
+    "eval_returns": [
+      382.5223809053355,
+      382.5223809053355,
+      382.5223809053355
+    ],
     "browser_replay": "PASS"
   },
   "model_replay": "PASS",
@@ -86,5 +103,8 @@
   "third_party_lan_client": "NOT_RUN",
   "gpu_tests": "NOT_RUN",
   "menagerie_import": "NOT_RUN",
-  "untouched_third_party_containers": 27
+  "untouched_third_party_containers": 27,
+  "ci_result": "success",
+  "ci_unit_tests": "19 passed, 4 skipped",
+  "ci_environment_tests": "18/18 passed in CI"
 }

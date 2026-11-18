@@ -2,7 +2,9 @@
 
 - `BASE_SHA`：`f64bc8f5319754e3228bf626804ba408518c5171`
 - 分支：`agent/local-deploy-20261118-1058`
-- `final_sha`：见本文件末尾的提交记录（提交后回填）
+- `final_sha`（代码提交 tip）：`3f3ccb3f9cde03c967662d6486ac1578447eb2e3`
+- PR：https://github.com/1998x-stack/MuJoCo-Environment-Console/pull/1
+- CI：https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44235254442（success，2m36s）
 
 ## 代码变更
 
@@ -106,8 +108,12 @@
 
 | # | Commit | 说明 |
 |---|---|---|
-| 1 | `<fill after commit>` | `fix: frame MJPEG parts with a real CRLF terminator` |
-| 2 | `<fill after commit>` | `test: cover MJPEG framing, manifests and view-only scenes` |
-| 3 | `<fill after commit>` | `ci: assert MJPEG framing and validate environment manifests` |
-| 4 | `<fill after commit>` | `feat: add include+mesh and view-only example environments` |
-| 5 | `<fill after commit>` | `docs: add agent handoff, architecture, runbook and verification report` |
+| 1 | `76bfd96` | `fix: encode MJPEG parts with a real CRLF terminator` |
+| 2 | `276a979` | `feat: add include+mesh and view-only example environments`（含分类标签去重） |
+| 3 | `05aa668` | `test: cover MJPEG framing, manifest schema and view-only scenes` |
+| 4 | `a390265` | `ci: assert MJPEG framing and validate environment manifests` |
+| 5 | `7c8bf5f` | `docs: add handoff protocol, architecture, runbook and verification report` |
+| 6 | `3f3ccb3` | `test: import numpy lazily so the lightweight CI job can collect tests` |
+| 7 | 本次提交 | `docs: backfill PR, CI run and final SHA into the handoff record` |
+
+代码 tip：`3f3ccb3f9cde03c967662d6486ac1578447eb2e3`（`3f3ccb3`）。后续仅剩文档元数据提交，不再改动代码。
