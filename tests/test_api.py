@@ -22,6 +22,32 @@ def test_auth_health_catalog():
         assert client.get('/api/catalog').status_code == 401
 
 
+def test_catalog_reports_environment_problems():
+    """The catalog response must carry per-environment diagnostics, empty for shipped envs."""
+    with TestClient(main.app) as client:
+        client.post('/api/login', json={'password': 'test-only-secret'})
+        payload = client.get('/api/catalog').json()
+        assert 'environments' in payload and 'problems' in payload
+        assert isinstance(payload['problems'], list)
+        assert payload['problems'] == [], payload['problems']
+
+
+def test_catalog_stays_up_with_a_broken_environment(tmp_path, monkeypatch):
+    """A broken custom environment must degrade to a diagnostic, not break the console."""
+    (tmp_path / 'half_written').mkdir()
+    (tmp_path / 'half_written' / 'manifest.json').write_text('{oops')
+    import app.catalog as catalog
+    monkeypatch.setattr(main, 'scan', lambda: catalog.scan(tmp_path))
+    with TestClient(main.app) as client:
+        client.post('/api/login', json={'password': 'test-only-secret'})
+        response = client.get('/api/catalog')
+        assert response.status_code == 200
+        body = response.json()
+        assert body['environments'], 'built-in environments must still be listed'
+        assert any(p['id'] == 'custom:half_written' and p['reason'] == 'invalid_manifest_json'
+                   for p in body['problems'])
+
+
 def test_invalid_training_request():
     with TestClient(main.app) as client:
         client.post('/api/login', json={'password': 'test-only-secret'})
@@ -75,3 +101,64 @@ def test_view_only_environment_rejects_training():
         })
         assert response.status_code == 400
         assert 'trainable' in response.json()['detail'] or 'extra package' in response.json()['detail']
+
+
+class StubSession:
+    """Records subscribe/unsubscribe so the streaming endpoint can be tested without MuJoCo."""
+
+    class Process:
+        @staticmethod
+        def is_alive():
+            return True
+
+    def __init__(self):
+        self.process = StubSession.Process()
+        self._closed = False
+        self.subscribed = 0
+        self.unsubscribed = 0
+        self._frames = [b'jpeg-one', b'jpeg-two']
+
+    def touch(self):
+        pass
+
+    def subscribe(self):
+        self.subscribed += 1
+        return self.subscribed
+
+    def unsubscribe(self):
+        self.unsubscribed += 1
+        return 0
+
+    def status(self):
+        return {'id': 'stub'}
+
+    def wait_frame(self, seq, timeout=5):
+        if seq < len(self._frames):
+            return seq + 1, self._frames[seq]
+        return seq, None
+
+
+def test_stream_subscribes_then_unsubscribes(monkeypatch):
+    """A closed MJPEG connection must switch viewer rendering back off."""
+    import asyncio
+
+    stub = StubSession()
+    monkeypatch.setitem(main.manager.sessions, 'stubid', stub)
+
+    async def drive():
+        response = await main.session_stream('stubid', True)
+        iterator = response.body_iterator
+        chunks = []
+        async for chunk in iterator:
+            chunks.append(chunk)
+            if len(chunks) >= 2:
+                break
+        await iterator.aclose()          # what Starlette does when the client disconnects
+        return chunks
+
+    chunks = asyncio.run(drive())
+    assert stub.subscribed == 1
+    assert stub.unsubscribed == 1
+    body = b''.join(chunks)
+    assert body.count(b'--' + main.MJPEG_BOUNDARY.encode()) == 2
+    assert b'Content-Type: image/jpeg' in body

@@ -76,6 +76,105 @@ def test_reject_path_traversal(tmp_path, monkeypatch):
     assert not any(x['id'] == 'custom:sample' for x in catalog.discover())
 
 
+def _broken_env_tree(tmp_path):
+    (tmp_path / 'ok_mjcf').mkdir()
+    (tmp_path / 'ok_mjcf' / 'manifest.json').write_text(
+        json.dumps({'kind': 'mjcf', 'name': 'OK', 'xml': 'model.xml'}))
+    (tmp_path / 'ok_mjcf' / 'model.xml').write_text('<mujoco/>')
+
+    (tmp_path / 'broken_json').mkdir()
+    (tmp_path / 'broken_json' / 'manifest.json').write_text('{not json')
+
+    (tmp_path / 'not_an_object').mkdir()
+    (tmp_path / 'not_an_object' / 'manifest.json').write_text('[1, 2, 3]')
+
+    (tmp_path / 'no_manifest').mkdir()
+
+    (tmp_path / 'missing_xml').mkdir()
+    (tmp_path / 'missing_xml' / 'manifest.json').write_text(
+        json.dumps({'kind': 'mjcf', 'name': 'Missing', 'xml': 'nope.xml'}))
+
+    (tmp_path / 'outside_xml').mkdir()
+    (tmp_path / 'outside_xml' / 'manifest.json').write_text(
+        json.dumps({'kind': 'mjcf', 'name': 'Outside', 'xml': '../escape.xml'}))
+    (tmp_path / 'escape.xml').write_text('<mujoco/>')
+
+    (tmp_path / 'bad_xml_field').mkdir()
+    (tmp_path / 'bad_xml_field' / 'manifest.json').write_text(
+        json.dumps({'kind': 'mjcf', 'name': 'Bad', 'xml': 'model.txt'}))
+
+    (tmp_path / 'unsupported_kind').mkdir()
+    (tmp_path / 'unsupported_kind' / 'manifest.json').write_text(
+        json.dumps({'kind': 'dm_control', 'name': 'Unsupported'}))
+
+    (tmp_path / 'gym_bad_module').mkdir()
+    (tmp_path / 'gym_bad_module' / 'manifest.json').write_text(
+        json.dumps({'kind': 'gym', 'name': 'Gym', 'gym_id': 'X-v0', 'registration_module': '1bad' }))
+
+    (tmp_path / 'gym_bad_id').mkdir()
+    (tmp_path / 'gym_bad_id' / 'manifest.json').write_text(
+        json.dumps({'kind': 'gym', 'name': 'Gym', 'gym_id': ''}))
+
+    (tmp_path / 'schema_violation').mkdir()
+    (tmp_path / 'schema_violation' / 'manifest.json').write_text(
+        json.dumps({'kind': 'mjcf', 'name': 'x' * 200, 'xml': 'model.xml'}))
+    (tmp_path / 'schema_violation' / 'model.xml').write_text('<mujoco/>')
+
+    bad_folder = tmp_path / 'bad name!'
+    bad_folder.mkdir()
+    (bad_folder / 'manifest.json').write_text(json.dumps({'kind': 'mjcf', 'name': 'Bad', 'xml': 'm.xml'}))
+
+
+def test_broken_environments_are_reported_not_fatal(tmp_path, monkeypatch):
+    """A broken custom environment must be diagnosable, and must not stop discovery."""
+    import app.catalog as catalog
+    _broken_env_tree(tmp_path)
+
+    entries, problems = catalog.scan(tmp_path)
+    ids = {e['id'] for e in entries}
+    assert 'custom:ok_mjcf' in ids, 'the healthy environment must still be listed'
+    assert not any(i.startswith('custom:broken') or i.endswith('missing_xml') for i in ids)
+
+    reasons = {p['id']: p['reason'] for p in problems}
+    assert reasons['custom:broken_json'] == 'invalid_manifest_json'
+    assert reasons['custom:not_an_object'] == 'manifest_not_an_object'
+    assert reasons['custom:no_manifest'] == 'missing_manifest'
+    assert reasons['custom:missing_xml'] == 'xml_missing'
+    assert reasons['custom:outside_xml'] == 'xml_outside_environment'
+    assert reasons['custom:bad_xml_field'] == 'invalid_xml_field'
+    assert reasons['custom:unsupported_kind'] == 'unsupported_kind'
+    assert reasons['custom:gym_bad_module'] == 'invalid_registration_module'
+    assert reasons['custom:gym_bad_id'] == 'invalid_gym_id'
+    assert reasons['custom:bad name!'] == 'invalid_directory_name'
+    assert all(p['severity'] == 'error' for p in problems if p['reason'] != 'schema_violation')
+    assert all(p['detail'] for p in problems), 'every problem needs a human-readable detail'
+
+    # discover() stays exception-free and returns the usable subset
+    monkeypatch.setattr(catalog, 'ENV_ROOT', tmp_path)
+    usable = catalog.discover()
+    assert any(e['id'] == 'custom:ok_mjcf' for e in usable)
+    assert not any(e['id'] == 'custom:broken_json' for e in usable)
+
+
+def test_schema_violations_are_warnings_not_rejections(tmp_path):
+    """Schema problems are reported, but a merely out-of-range manifest stays usable."""
+    import app.catalog as catalog
+    if catalog._validator() is None:
+        pytest.skip('jsonschema not installed')
+    _broken_env_tree(tmp_path)
+    entries, problems = catalog.scan(tmp_path)
+    violations = [p for p in problems if p['reason'] == 'schema_violation']
+    assert any(p['id'] == 'custom:schema_violation' for p in violations)
+    assert all(p['severity'] == 'warning' for p in violations)
+    assert 'custom:schema_violation' in {e['id'] for e in entries}, 'warnings must not hide the environment'
+
+
+def test_scan_survives_a_missing_env_root(tmp_path):
+    import app.catalog as catalog
+    entries, problems = catalog.scan(tmp_path / 'does-not-exist')
+    assert len(entries) >= 15 and problems == []
+
+
 def test_manifest_source_xml_parse():
     file = Path(__file__).parents[1] / 'envs/custom_pendulum/model.xml'
     root = ET.parse(file).getroot()

@@ -1,10 +1,36 @@
-"""Integration tests skip if MuJoCo/Gymnasium not installed on test host."""
+"""Integration tests skip if MuJoCo/Gymnasium not installed on test host.
+
+Set ``CONSOLE_TEST_REQUIRE_PHYSICS=1`` (done by the CI step that runs the suite inside the
+deployed image) to turn a missing dependency into a failure instead of a silent skip.
+"""
+import importlib
+import os
+
 import pytest
+
+STRICT = os.environ.get('CONSOLE_TEST_REQUIRE_PHYSICS') == '1'
+
+
+def require(module):
+    try:
+        return importlib.import_module(module)
+    except ImportError as exc:
+        if STRICT:
+            pytest.fail(f'{module} is required (CONSOLE_TEST_REQUIRE_PHYSICS=1) but not importable: {exc}')
+        pytest.skip(f'{module} not installed on the test host')
+
+
+def test_physics_dependencies_are_available_when_required():
+    """Guards the guard: in strict mode the suite must fail loudly, never silently skip."""
+    if not STRICT:
+        pytest.skip('strict physics mode is off; run with CONSOLE_TEST_REQUIRE_PHYSICS=1')
+    for module in ('mujoco', 'gymnasium', 'numpy'):
+        require(module)
 
 
 def test_standard_env_physics():
-    pytest.importorskip('gymnasium')
-    pytest.importorskip('mujoco')
+    require('gymnasium')
+    require('mujoco')
     from app.catalog import get_env
     from app.env_factory import make_environment
     env = make_environment(get_env('gym:InvertedPendulum-v5'))
@@ -18,8 +44,8 @@ def test_standard_env_physics():
 
 
 def test_custom_env_physics():
-    pytest.importorskip('gymnasium')
-    pytest.importorskip('mujoco')
+    require('gymnasium')
+    require('mujoco')
     from app.catalog import get_env
     from app.env_factory import make_environment
     env = make_environment(get_env('custom:custom_pendulum'))
@@ -35,9 +61,9 @@ def test_custom_env_physics():
 
 def test_custom_double_pendulum_resolves_include_and_mesh():
     """<include> plus a relative mesh asset must load and render through the adapter."""
-    pytest.importorskip('gymnasium')
-    pytest.importorskip('mujoco')
-    np = pytest.importorskip('numpy')
+    require('gymnasium')
+    require('mujoco')
+    np = require('numpy')
     from app.catalog import get_env
     from app.env_factory import make_environment
     descriptor = get_env('custom:custom_double_pendulum')
@@ -58,9 +84,9 @@ def test_custom_double_pendulum_resolves_include_and_mesh():
 
 
 def test_view_only_scene_runs_without_actuators():
-    pytest.importorskip('gymnasium')
-    pytest.importorskip('mujoco')
-    np = pytest.importorskip('numpy')
+    require('gymnasium')
+    require('mujoco')
+    np = require('numpy')
     from app.catalog import get_env
     from app.env_factory import make_environment
     descriptor = get_env('custom:scene_demo_viewer')
