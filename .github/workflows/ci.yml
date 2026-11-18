@@ -15,6 +15,11 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history: scripts/handoff_metadata.py classifies commits in base..HEAD, and a
+          # shallow clone silently yields an empty range. origin/main may still be absent
+          # (single-ref checkout); the helper then falls back to the root commit and says so.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v7
         with:

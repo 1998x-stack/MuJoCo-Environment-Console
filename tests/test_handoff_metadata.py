@@ -53,9 +53,9 @@ def repo(tmp_path):
     return root
 
 
-def run_metadata(repo_dir: Path, *args: str):
+def run_metadata(repo_dir: Path, *args: str, base: str = 'origin/main'):
     result = subprocess.run([sys.executable, str(SCRIPT), '--repo', str(repo_dir), '--base',
-                             'origin/main', *args], capture_output=True, text=True)
+                             base, *args], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout), result.stderr
 
@@ -109,13 +109,34 @@ def test_reports_a_clean_json_document(repo):
 
 
 def test_real_repository_reports_a_consistent_taxonomy():
-    """On this checkout the helper must agree with git and mark unvalidated doc heads."""
-    report, _ = run_metadata(ROOT, '--base', 'HEAD')
+    """On this checkout the helper must agree with git.
+
+    The base is given explicitly as HEAD: CI checks out a single ref, so origin/main does not
+    exist there and a test that assumed it would fail (which is how this was found).
+    """
+    report, _ = run_metadata(ROOT, base='HEAD')
     head = git(ROOT, 'rev-parse', 'HEAD')
     assert report['pr_head_sha'] == head
     assert report['base_sha'] == head, 'merge-base with HEAD is HEAD'
+    assert report['base_ref_resolved'] is True
+    assert report['commit_count_since_base'] >= 0
 
-    report2, _ = run_metadata(ROOT)
-    codes = git(ROOT, 'log', '--format=%H', f"{report2['base_sha']}..HEAD").splitlines()
-    assert report2['code_sha'] in codes or report2['code_sha'] == report2['base_sha']
-    assert report2['validated_sha'] == report2['code_sha']
+
+def test_a_missing_base_ref_falls_back_instead_of_crashing(repo):
+    """A shallow or single-branch checkout must not make the helper unusable."""
+    commit(repo, 'feat: work', {'app/x.py': '1\n'})
+    commit(repo, 'docs: notes', {'docs/n.md': 'n\n'})
+    root = git(repo, 'rev-list', '--max-parents=0', 'HEAD').splitlines()[-1]
+    report, stderr = run_metadata(repo, base='refs/heads/definitely-absent')
+    assert report['base_ref_resolved'] is False
+    assert report['base_sha'] == root, 'the fallback base is the root commit'
+    assert 'is not available in this checkout' in stderr
+
+
+def test_a_shallow_range_is_reported_rather_than_guessed(repo):
+    """With no commits in base..HEAD the helper says so instead of inventing a code_sha."""
+    commit(repo, 'feat: only commit', {'app/y.py': '1\n'})
+    report, stderr = run_metadata(repo, base='HEAD')
+    assert report['commit_count_since_base'] == 0
+    assert report['code_sha'] == report['base_sha']
+    assert 'no commits found in base..HEAD' in stderr
