@@ -130,6 +130,27 @@ jobs:
           docker compose exec -T console python scripts/smoke_test.py --render --all
           timeout 600 docker compose exec -T console python scripts/training_smoke_test.py
 
+      - name: Run the full test suite inside the deployed image
+        run: |
+          # The lightweight job above cannot import MuJoCo, so its physics tests are skipped.
+          # Here the suite runs against the image that actually ships, and
+          # CONSOLE_TEST_REQUIRE_PHYSICS=1 turns a missing dependency into a failure.
+          docker run --rm --user 0:0 -e HOME=/tmp -e CONSOLE_TEST_REQUIRE_PHYSICS=1 \
+            -v "$PWD":/work -w /work mujoco-environment-console:local \
+            sh -c 'pip install --quiet --no-cache-dir httpx pytest jsonschema && python -m pytest -q -rs -p no:cacheprovider' \
+            | tee /tmp/full-pytest.log
+          python - <<'PY'
+          import re
+          text = open('/tmp/full-pytest.log').read()
+          summary = text.strip().splitlines()[-1]
+          skipped = re.search(r'(\d+) skipped', text)
+          if skipped and int(skipped.group(1)) > 0:
+              raise SystemExit(f'{skipped.group(1)} test(s) skipped in the strict suite: {summary}')
+          if 'passed' not in summary:
+              raise SystemExit(f'no passing summary found: {summary}')
+          print(f'strict suite OK: {summary}')
+          PY
+
       - name: Collect container logs on failure
         if: failure()
         run: docker compose logs --tail=200 console || true
