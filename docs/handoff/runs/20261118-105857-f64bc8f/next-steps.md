@@ -21,7 +21,7 @@
      MJPEG 分帧断言两步确实执行了**（而非被跳过）。
   2. 回填 `docs/handoff/latest.md` 的 `Final local SHA`、`PR`、`CI run`，
      以及 `changes.md` 的提交表。
-- 验收标准：`latest.md` 中三处 PENDING 全部替换为真实值；CI run URL 可访问且结论为 success；
+- 验收标准（当时）：`latest.md` 中三处 PENDING 全部替换为真实值；CI run URL 可访问且结论为 success；
   CI 日志中能检索到 `MJPEG framing OK` 与 `3/3 manifests valid`。
 
 ---

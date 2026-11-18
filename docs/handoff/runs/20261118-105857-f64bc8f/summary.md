@@ -58,4 +58,4 @@
 | GPU / CUDA 路径 | NOT_RUN | 项目为 CPU-first，且未要求 |
 | Menagerie 导入脚本 | NOT_RUN | 需克隆 GB 级仓库；`view_only` 路径已由新示例等价覆盖 |
 | ffmpeg/OpenCV 实测 MJPEG | NOT_RUN | 本机未安装；已用严格 RFC 2046 解析器替代 |
-| GitHub Actions | PENDING | 推送后实测，结果回填 `latest.md` |
+| GitHub Actions | **PASS** | [run 44235254442](https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44235254442) success（2m36s）；含新增 schema 校验与 MJPEG 分帧断言 |
