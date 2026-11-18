@@ -25,13 +25,17 @@ jobs:
           node-version: "22"
 
       - name: Install lightweight test dependencies
-        run: python -m pip install fastapi uvicorn httpx pytest jsonschema
+        run: |
+          set -euo pipefail
+          python -m pip install fastapi uvicorn httpx pytest jsonschema
 
       - name: Python syntax
         run: python -m compileall -q app tests scripts
 
       - name: Unit tests
-        run: python -m pytest -q
+        run: |
+          set -euo pipefail
+          python -m pytest -q
 
       - name: JavaScript syntax
         run: node --check app/static/app.js
@@ -79,6 +83,7 @@ jobs:
 
       - name: Verify authenticated API and MJPEG viewer
         run: |
+          set -euo pipefail
           curl -fsS -c /tmp/mujoco-cookies \
             -H 'Content-Type: application/json' \
             -d '{"password":"ci-test-secret"}' \
@@ -125,31 +130,41 @@ jobs:
           curl -fsS -b /tmp/mujoco-cookies -X POST \
             "http://127.0.0.1:18000/api/sessions/${sid}/stop"
 
+      - name: Verify the shipped image carries its manifests and schema
+        run: |
+          # No bind mount on purpose: this must exercise the image's own /app copy. A missing
+          # schemas/ used to disable every manifest check while the API still reported
+          # "0 problems" (MJC-P3-110).
+          set -euo pipefail
+          docker run --rm mujoco-environment-console:local python scripts/validate_manifests.py
+          docker run --rm mujoco-environment-console:local python -c \
+            "from app import catalog; s = catalog.schema_status(); assert s['available'], s; print('image manifest schema OK:', s['path'])"
+
       - name: Verify physics, offscreen rendering, PPO and SAC
         run: |
+          set -euo pipefail
           docker compose exec -T console python scripts/smoke_test.py --render --all
           timeout 600 docker compose exec -T console python scripts/training_smoke_test.py
 
       - name: Run the full test suite inside the deployed image
         run: |
-          # The lightweight job above cannot import MuJoCo, so its physics tests are skipped.
-          # Here the suite runs against the image that actually ships, and
-          # CONSOLE_TEST_REQUIRE_PHYSICS=1 turns a missing dependency into a failure.
-          docker run --rm --user 0:0 -e HOME=/tmp -e CONSOLE_TEST_REQUIRE_PHYSICS=1 \
+          # GitHub's default bash has no pipefail, so `docker run ... | tee` would hide a
+          # non-zero pytest exit status. Everything here must fail the job on failure, error,
+          # timeout, or a collection error, and the verdict comes from structured JUnit XML.
+          set -euo pipefail
+          mkdir -p .artifacts/ci-pytest
+          report=.artifacts/ci-pytest/junit.xml
+          rm -f "$report"
+          trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "=== test log tail ==="; tail -n 60 /tmp/full-pytest.log || true; fi; exit $rc' EXIT
+          timeout 900 docker run --rm --user 0:0 -e HOME=/tmp -e CONSOLE_TEST_REQUIRE_PHYSICS=1 \
             -v "$PWD":/work -w /work mujoco-environment-console:local \
-            sh -c 'pip install --quiet --no-cache-dir httpx pytest jsonschema && python -m pytest -q -rs -p no:cacheprovider' \
+            sh -c 'export DEBIAN_FRONTEND=noninteractive; \
+                   apt-get update -qq && apt-get install -y -qq --no-install-recommends git && \
+                   git config --global --add safe.directory /work && \
+                   pip install --quiet --no-cache-dir httpx pytest jsonschema && \
+                   python -m pytest -q -rs -p no:cacheprovider --junit-xml=/work/.artifacts/ci-pytest/junit.xml' \
             | tee /tmp/full-pytest.log
-          python - <<'PY'
-          import re
-          text = open('/tmp/full-pytest.log').read()
-          summary = text.strip().splitlines()[-1]
-          skipped = re.search(r'(\d+) skipped', text)
-          if skipped and int(skipped.group(1)) > 0:
-              raise SystemExit(f'{skipped.group(1)} test(s) skipped in the strict suite: {summary}')
-          if 'passed' not in summary:
-              raise SystemExit(f'no passing summary found: {summary}')
-          print(f'strict suite OK: {summary}')
-          PY
+          python scripts/check_pytest_report.py "$report" /tmp/full-pytest.log
 
       - name: Collect container logs on failure
         if: failure()
