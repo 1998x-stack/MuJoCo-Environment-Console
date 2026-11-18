@@ -42,6 +42,9 @@ def run_algorithm(manager: JobManager, algorithm: str, descriptor: dict) -> dict
     folder, _ = manager.model(run_id, descriptor['id'], fingerprint(descriptor))
     viewer = ViewerSession(descriptor, fps=8, width=320, height=240)
     try:
+        # A viewer only rasterises while a consumer is subscribed; without this the worker
+        # stays in physics-only mode and never publishes a frame.
+        viewer.subscribe()
         viewer.command({
             'op': 'policy',
             'run_dir': str(folder),
@@ -59,6 +62,7 @@ def run_algorithm(manager: JobManager, algorithm: str, descriptor: dict) -> dict
         else:
             raise TimeoutError(f'{algorithm} policy viewer did not produce a frame')
     finally:
+        viewer.unsubscribe()
         viewer.close()
 
     return {

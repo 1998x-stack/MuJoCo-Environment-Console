@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 import asyncio
+import logging
 import os
 import secrets
 import threading
@@ -13,12 +14,13 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.catalog import discover, get_env
+from app.catalog import get_env, scan
 from app.jobs import JobManager, fingerprint, RUNS
 from app.sessions import SessionManager
 
 STATIC = Path(__file__).parent / 'static'
 MJPEG_BOUNDARY = 'frame'
+logger = logging.getLogger('mujoco-console')
 PASSWORD = os.getenv('MUJOCO_CONSOLE_PASSWORD', '')
 LOGIN_TTL = 12 * 3600
 COOKIE_SECURE = os.getenv('COOKIE_SECURE', '0').strip().lower() in ('1', 'true', 'yes')
@@ -30,6 +32,9 @@ AUTH_LOCK = threading.RLock()
 manager = SessionManager(
     limit=int(os.getenv('MAX_VIEWERS', '3')),
     idle_seconds=int(os.getenv('SESSION_IDLE_SECONDS', '900')),
+    fps=os.getenv('VIEWER_FPS'),
+    width=os.getenv('VIEWER_WIDTH'),
+    height=os.getenv('VIEWER_HEIGHT'),
 )
 jobs = JobManager()
 
@@ -38,6 +43,12 @@ jobs = JobManager()
 async def lifespan(_app):
     jobs.start_accepting()
     manager.start_reaper()
+    # Report unusable environment folders without refusing to start: a broken custom
+    # environment must never take the console down.
+    _entries, problems = scan()
+    for problem in problems:
+        logger.warning('environment %s [%s/%s] %s', problem['id'], problem['severity'],
+                       problem['reason'], problem['detail'])
     try:
         yield
     finally:
@@ -198,7 +209,8 @@ def me(_: bool = Depends(authenticated)):
 
 @app.get('/api/catalog')
 def catalog(_: bool = Depends(authenticated)):
-    return {'environments': discover()}
+    environments, problems = scan()
+    return {'environments': environments, 'problems': problems}
 
 
 @app.post('/api/sessions')
@@ -269,13 +281,19 @@ async def session_stream(sid: str, _: bool = Depends(authenticated)):
 
     async def gen():
         seq = 0
-        while True:
-            next_seq, jpeg = await asyncio.to_thread(session.wait_frame, seq, 3)
-            if next_seq > seq and jpeg:
-                seq = next_seq
-                yield mjpeg_part(jpeg)
-            elif not session.process.is_alive() or session._closed:
-                return
+        # Rendering is only enabled while at least one MJPEG client is attached; a session
+        # whose browser went away must not keep a software rasteriser busy.
+        session.subscribe()
+        try:
+            while True:
+                next_seq, jpeg = await asyncio.to_thread(session.wait_frame, seq, 3)
+                if next_seq > seq and jpeg:
+                    seq = next_seq
+                    yield mjpeg_part(jpeg)
+                elif not session.process.is_alive() or session._closed:
+                    return
+        finally:
+            session.unsubscribe()
 
     return StreamingResponse(
         gen(), media_type=f'multipart/x-mixed-replace; boundary={MJPEG_BOUNDARY}'
