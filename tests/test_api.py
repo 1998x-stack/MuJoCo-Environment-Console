@@ -49,3 +49,29 @@ def test_secure_cookie_can_be_enabled(monkeypatch):
         response = client.post('/api/login', json={'password': 'test-only-secret'})
         assert response.status_code == 200
         assert 'secure' in response.headers['set-cookie'].lower()
+
+
+def test_mjpeg_part_is_rfc2046_framed():
+    """A part must end in a real CRLF so spec-conformant clients can find the boundary."""
+    jpeg = b'\xff\xd8\xff\xe0payload\xff\xd9'
+    part = main.mjpeg_part(jpeg)
+    assert part.startswith(b'--' + main.MJPEG_BOUNDARY.encode() + b'\r\n')
+    assert part.endswith(b'\r\n\r\n' + jpeg + b'\r\n')
+    assert b'Content-Length: ' + str(len(jpeg)).encode() in part
+    assert b'\\r\\n' not in part, 'boundary terminator must not be an escaped backslash literal'
+
+    stream = part + main.mjpeg_part(jpeg)
+    # exactly one CRLF-delimited delimiter joins the two parts
+    assert stream.count(b'\r\n--' + main.MJPEG_BOUNDARY.encode()) == 1
+    assert stream.count(b'--' + main.MJPEG_BOUNDARY.encode()) == 2
+
+
+def test_view_only_environment_rejects_training():
+    """Selection-only scenes must never be trainable, regardless of installed libraries."""
+    with TestClient(main.app) as client:
+        client.post('/api/login', json={'password': 'test-only-secret'})
+        response = client.post('/api/training', json={
+            'env_id': 'custom:scene_demo_viewer', 'algorithm': 'PPO', 'timesteps': 2000
+        })
+        assert response.status_code == 400
+        assert 'trainable' in response.json()['detail'] or 'extra package' in response.json()['detail']
