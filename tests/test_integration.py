@@ -1,5 +1,4 @@
 """Integration tests skip if MuJoCo/Gymnasium not installed on test host."""
-import numpy as np
 import pytest
 
 
@@ -38,6 +37,7 @@ def test_custom_double_pendulum_resolves_include_and_mesh():
     """<include> plus a relative mesh asset must load and render through the adapter."""
     pytest.importorskip('gymnasium')
     pytest.importorskip('mujoco')
+    np = pytest.importorskip('numpy')
     from app.catalog import get_env
     from app.env_factory import make_environment
     descriptor = get_env('custom:custom_double_pendulum')
@@ -60,6 +60,7 @@ def test_custom_double_pendulum_resolves_include_and_mesh():
 def test_view_only_scene_runs_without_actuators():
     pytest.importorskip('gymnasium')
     pytest.importorskip('mujoco')
+    np = pytest.importorskip('numpy')
     from app.catalog import get_env
     from app.env_factory import make_environment
     descriptor = get_env('custom:scene_demo_viewer')
