@@ -29,8 +29,8 @@ bash scripts/deploy.sh
 
 - **Gymnasium MuJoCo v5**：11 个标准控制、运动、机械臂和人形任务。
 - **Gymnasium Robotics Fetch**：4 个 Fetch 机械臂任务；默认安装，可在 `.env` 设置 `INSTALL_ROBOTICS=0` 跳过。
-- **自定义 MJCF/XML**：扫描 `envs/<name>/manifest.json`，支持相对路径资源、网格和纹理。
-- **仿真**：独立进程运行环境，服务器端 OSMesa 离屏渲染，通过 MJPEG 向浏览器传输。
+- **自定义 MJCF/XML**：扫描 `envs/<name>/manifest.json`，支持相对路径资源、网格和纹理。仓库自带 `custom_pendulum`、`custom_double_pendulum`（`<include>` + 网格）与 `scene_demo_viewer`（`view_only` 仅演示）三个示例，可直接复制为模板。
+- **仿真**：独立进程运行环境，服务器端 OSMesa 离屏渲染，通过 MJPEG 向浏览器传输。MJPEG 分片按 RFC 2046 使用 CRLF 分隔，除浏览器外也可被 ffmpeg/OpenCV 等标准客户端解析。
 - **强化学习**：PPO、SAC；训练日志、进度、评估结果、模型保存和策略回放。PPO 使用完整 rollout batch，实际步数可能向上取整（例如请求 1,000 步时默认 rollout 可能执行 2,048 步）；界面同时展示请求步数与实际完成步数。
 - **资源保护**：限制并发查看器、单训练任务、空闲会话回收，以及服务退出时的 worker 清理。
 
