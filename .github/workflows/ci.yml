@@ -25,7 +25,7 @@ jobs:
           node-version: "22"
 
       - name: Install lightweight test dependencies
-        run: python -m pip install fastapi uvicorn httpx pytest
+        run: python -m pip install fastapi uvicorn httpx pytest jsonschema
 
       - name: Python syntax
         run: python -m compileall -q app tests scripts
@@ -41,6 +41,9 @@ jobs:
 
       - name: Manifest schema JSON
         run: python -m json.tool schemas/environment.schema.json > /dev/null
+
+      - name: Validate shipped environment manifests against the schema
+        run: python scripts/validate_manifests.py
 
       - name: Prepare isolated container deployment
         run: |
@@ -87,9 +90,12 @@ jobs:
           data = json.load(open('/tmp/mujoco-catalog.json'))
           envs = data['environments']
           by_id = {e['id']: e for e in envs}
-          required = {'gym:Hopper-v5', 'fetch:FetchReach-v4', 'custom:custom_pendulum'}
+          required = {'gym:Hopper-v5', 'fetch:FetchReach-v4', 'custom:custom_pendulum',
+                      'custom:custom_double_pendulum', 'custom:scene_demo_viewer'}
           assert required.issubset(by_id), required - by_id.keys()
           assert all(by_id[env_id]['installed'] for env_id in required)
+          assert by_id['custom:scene_demo_viewer']['trainable'] is False
+          assert by_id['custom:custom_double_pendulum']['trainable'] is True
           assert len(by_id) == len(envs), 'duplicate environment IDs'
           print(f"Catalog OK: {len(envs)} discovered environments; required core set installed")
           PY
@@ -109,6 +115,13 @@ jobs:
           fi
           test -s /tmp/mujoco-stream.bin
           grep -a -q 'Content-Type: image/jpeg' /tmp/mujoco-stream.bin
+          python - <<'PY'
+          data = open('/tmp/mujoco-stream.bin', 'rb').read()
+          assert data.count(b'--frame') >= 1, 'no MJPEG boundary in the stream'
+          assert b'\\r\\n--frame' not in data, 'boundary uses an escaped literal instead of CRLF'
+          assert b'\r\n--frame' in data, 'MJPEG parts are not CRLF-delimited (RFC 2046)'
+          print(f"MJPEG framing OK: {data.count(b'--frame')} CRLF-delimited boundaries")
+          PY
           curl -fsS -b /tmp/mujoco-cookies -X POST \
             "http://127.0.0.1:18000/api/sessions/${sid}/stop"
 
