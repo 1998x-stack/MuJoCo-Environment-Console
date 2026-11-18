@@ -38,21 +38,41 @@ FETCH = [
 ]
 
 _schema_validator = None
-_schema_loaded = False
+_schema_loaded_for = None
+_schema_error = None
 
 
 def _validator():
-    """Schema validator, or None when the optional ``jsonschema`` package is unavailable."""
-    global _schema_validator, _schema_loaded
-    if not _schema_loaded:
-        _schema_loaded = True
+    """Schema validator, or None when the schema file or ``jsonschema`` package is unavailable.
+
+    The cache is keyed on the schema path, not on a one-shot flag: a validator built for a
+    different path must never be reused, otherwise a single failed load (missing file, or a
+    caller pointing at another schema) would disable validation for the rest of the process.
+    """
+    global _schema_validator, _schema_loaded_for, _schema_error
+    key = str(SCHEMA_PATH)
+    if _schema_loaded_for != key:
+        _schema_loaded_for = key
         try:
             import jsonschema
             schema = json.loads(SCHEMA_PATH.read_text(encoding='utf8'))
             _schema_validator = jsonschema.Draft202012Validator(schema)
-        except (ImportError, OSError, ValueError, TypeError):
+            _schema_error = None
+        except (ImportError, OSError, ValueError, TypeError) as exc:
             _schema_validator = None
+            _schema_error = f'{type(exc).__name__}: {exc}'
     return _schema_validator
+
+
+def schema_status():
+    """Whether runtime manifest validation is active, and why not when it is not.
+
+    Validation used to fail closed and silent: if the schema file was missing (for example
+    because the image did not ship ``schemas/``) every manifest was accepted and the API still
+    reported "0 problems". Callers can now surface this instead of pretending all is well.
+    """
+    return {'available': _validator() is not None, 'path': str(SCHEMA_PATH),
+            'reason': _schema_error}
 
 
 def _module_available(name):

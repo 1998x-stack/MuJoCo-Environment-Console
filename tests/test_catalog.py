@@ -206,3 +206,29 @@ def test_missing_dotted_registration_module_is_unavailable(monkeypatch):
         'Missing-v0', 'missing.parent',
     )
     assert entry['installed'] is False
+
+
+def test_schema_status_explains_an_unavailable_validator(tmp_path, monkeypatch):
+    """A missing schema file must be reported, not silently treated as "no problems"."""
+    import app.catalog as catalog
+    monkeypatch.setattr(catalog, 'SCHEMA_PATH', tmp_path / 'absent.json')
+    status = catalog.schema_status()
+    assert status['available'] is False
+    assert 'absent.json' in status['path']
+    assert 'FileNotFoundError' in (status['reason'] or ''), status
+
+
+def test_the_validator_cache_follows_the_schema_path(tmp_path, monkeypatch):
+    """A validator built for one path must not be reused for another.
+
+    Regression guard: the cache used to be a one-shot flag, so one failed load disabled
+    manifest validation for the whole process, including for a later valid schema.
+    """
+    import app.catalog as catalog
+    monkeypatch.setattr(catalog, 'SCHEMA_PATH', tmp_path / 'absent.json')
+    assert catalog.schema_status()['available'] is False
+    good = tmp_path / 'schema.json'
+    good.write_text(json.dumps({'type': 'object', 'required': ['kind']}))
+    monkeypatch.setattr(catalog, 'SCHEMA_PATH', good)
+    assert catalog.schema_status()['available'] is True
+    assert catalog._validator() is not None

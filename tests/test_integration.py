@@ -100,3 +100,27 @@ def test_view_only_scene_runs_without_actuators():
         assert env.render() is not None
     finally:
         env.close()
+
+
+def test_the_imported_catalog_copy_has_its_manifest_schema():
+    """Whichever copy of ``app.catalog`` is imported must find its schema beside it.
+
+    Regression guard for MJC-P3-110: ``schemas/`` was in ``.dockerignore`` and was not copied
+    into the image, so ``catalog._validator()`` returned None, every manifest was accepted
+    unchecked, and ``/api/catalog`` still reported zero problems.
+
+    Note: when the suite runs from a bind mount this checks the checked-out copy. The copy that
+    ships inside the image is asserted separately by the CI step that runs
+    ``scripts/validate_manifests.py`` inside the image with no bind mount.
+    """
+    require('jsonschema')
+    from app import catalog
+    assert catalog.SCHEMA_PATH.is_file(), (
+        f'the manifest schema is not present at {catalog.SCHEMA_PATH}; '
+        'check that the image copies schemas/')
+    status = catalog.schema_status()
+    assert status['available'] is True, status
+    assert status['reason'] is None, status
+    validator = catalog._validator()
+    assert list(validator.iter_errors({'id': 'only-an-id'})), \
+        'the schema must reject a manifest that is missing its required fields'

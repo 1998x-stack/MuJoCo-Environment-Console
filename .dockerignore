@@ -9,6 +9,5 @@ data/
 .github
 release/
 tests/
-schemas/
 README.md
 pytest.ini

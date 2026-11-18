@@ -26,6 +26,7 @@ RUN if [ "$INSTALL_ROBOTICS" = "1" ]; then pip install --no-cache-dir -r require
     && pip check
 COPY app ./app
 COPY envs ./envs
+COPY schemas ./schemas
 COPY scripts ./scripts
 RUN mkdir -p /app/data/runs
 EXPOSE 8000

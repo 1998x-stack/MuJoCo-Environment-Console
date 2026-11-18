@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.catalog import get_env, scan
+from app.catalog import get_env, scan, schema_status
 from app.jobs import JobManager, fingerprint, RUNS
 from app.sessions import SessionManager
 
@@ -49,6 +49,14 @@ async def lifespan(_app):
     for problem in problems:
         logger.warning('environment %s [%s/%s] %s', problem['id'], problem['severity'],
                        problem['reason'], problem['detail'])
+    # A missing schema used to look exactly like a clean catalog. Say so at startup instead.
+    schema = schema_status()
+    if not schema['available']:
+        logger.warning('manifest schema validation is DISABLED (%s: %s); '
+                       'environment manifests are accepted unchecked',
+                       schema['path'], schema['reason'])
+    else:
+        logger.info('manifest schema validation active: %s', schema['path'])
     try:
         yield
     finally:
@@ -209,8 +217,13 @@ def me(_: bool = Depends(authenticated)):
 
 @app.get('/api/catalog')
 def catalog(_: bool = Depends(authenticated)):
+    """Shipped environments plus diagnosable problems.
+
+    ``schema`` states whether runtime manifest validation is actually active: a missing schema
+    file used to be indistinguishable from a clean catalog (both reported zero problems).
+    """
     environments, problems = scan()
-    return {'environments': environments, 'problems': problems}
+    return {'environments': environments, 'problems': problems, 'schema': schema_status()}
 
 
 @app.post('/api/sessions')
