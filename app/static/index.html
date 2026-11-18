@@ -21,7 +21,7 @@
         <label class="search-wrap"><span>⌕</span><input id="search" type="search" placeholder="搜索环境或类别..." autocomplete="off" /></label>
         <div class="category-tabs" id="categoryTabs"><button data-filter="all" class="active">全部</button><button data-filter="Locomotion">运动</button><button data-filter="Control">控制</button><button data-filter="Manipulation">机械臂</button><button data-filter="Custom">扩展</button></div>
         <div id="envList" class="env-list"></div>
-        <div class="catalog-note"><span class="note-icon">+</span><div><strong>可扩展环境</strong><small>在服务器 envs/ 目录放入 XML 和 manifest.json，刷新后即可发现。</small></div></div>
+        <div class="catalog-note"><span class="note-icon">+</span><div><strong>可扩展环境</strong><small>在服务器 envs/ 目录放入 XML 和 manifest.json，刷新后即可发现。</small></div></div><div class="notice" id="catalogProblems" hidden></div>
       </aside>
       <main class="sim-panel">
         <div class="sim-title"><div><span class="eyebrow">LIVE SIMULATION</span><h2 id="selectedTitle">选择一个环境开始</h2><p id="selectedSub">点击左侧环境，启动本地 MuJoCo 仿真实例</p></div><div class="live-indicator" id="liveIndicator"><span></span> OFFLINE</div></div>
