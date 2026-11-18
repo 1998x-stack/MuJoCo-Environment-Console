@@ -11,7 +11,9 @@
 - Remote main SHA: `f64bc8f5319754e3228bf626804ba408518c5171`（本轮开始时 = BASE_SHA，远端无新提交）
 - Branch: `agent/local-deploy-20261118-1058`
 - PR: https://github.com/1998x-stack/MuJoCo-Environment-Console/pull/1
-- CI run: https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44235254442 — **success**（2m36s）
+- CI run（代码 tip `3f3ccb3`）: https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44235254442 — **success**（2m36s）
+- CI run（文档 tip `147f814`）: https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44235963709 — **success**（2m36s）
+- CI 历史：`7c8bf5f` failure（顶层 `import numpy` 导致 pytest 收集失败，已修）→ 其后 3 次提交全部 success
 
 ## Current State
 
