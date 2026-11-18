@@ -8,7 +8,7 @@
 - OS: Ubuntu 24.04.3 LTS (noble), kernel 7.0.0-38-generic, x86_64, 12 逻辑线程, 31 GiB
 - `base_sha`: `8f3e435816572c0db5fabc4880095ca47fc0412a`（第二轮文档收尾；`origin/main` 仍为 `f64bc8f`）
 - `code_sha`: `e042d66`（本轮最后一个改动 `app/`/`tests/`/`scripts/`/`.github/` 的提交）
-- `pr_head_sha`: 本轮文档提交（其后仅 `docs/`，代码状态与 `code_sha` 相同）
+- `pr_head_sha`: `11466c63c73ae09f58bb7cb40bae9c2f70c0c4ed`（本轮文档提交；其后仅 `docs/`，代码状态与 `validated_sha` 相同）
 - `validated_sha`: `e042d66`（下表所有结论对应的代码状态）
 - `ci_run_id`: `44285265993`（on `e042d66`，**success**）；`44284580092`（on `5cf87de`，**failure**，原因见下）
 - Remote main SHA: `f64bc8f5319754e3228bf626804ba408518c5171`（PR #1 未合并，按指示不自动合并）

@@ -12,7 +12,7 @@
 |---|---|
 | `base_sha` | `8f3e435816572c0db5fabc4880095ca47fc0412a`（第二轮文档收尾；`origin/main` 仍为 `f64bc8f`） |
 | `code_sha` | `5cf87de627635ff985187dbc1d2b9f216389d398`（最后一个改动 `app/`/`scripts/`/`tests/`/`.github/` 的提交） |
-| `pr_head_sha` | `5cf87de`（代码提交即 HEAD，尚未提交本轮 docs） |
+| `pr_head_sha` | `11466c63c73ae09f58bb7cb40bae9c2f70c0c4ed`（本轮文档提交；其后仅 docs，代码状态同 `validated_sha`） |
 | `validated_sha` | `5cf87de`（本文件所有结论对应的代码状态） |
 | `ci_run_id` | `44285265993`（on `e042d66`，**success**） |
 

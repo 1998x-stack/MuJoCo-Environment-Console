@@ -9,7 +9,7 @@
 |---|---|
 | `base_sha` | `8f3e435816572c0db5fabc4880095ca47fc0412a` |
 | `code_sha` | `5cf87de627635ff985187dbc1d2b9f216389d398`（其后 `e042d66` 亦为代码/CI 变更） |
-| `pr_head_sha` | 见 `changes.md`（docs 提交后回填） |
+| `pr_head_sha` | `11466c63c73ae09f58bb7cb40bae9c2f70c0c4ed`（本轮文档提交；代码状态同 `validated_sha`） |
 | `validated_sha` | `e042d66`（本表所有结果对应的最后一个代码提交） |
 | `ci_run_id` | `44285265993`（on `e042d66`） |
 

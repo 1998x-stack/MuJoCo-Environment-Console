@@ -10,7 +10,7 @@
 | 4 | `0f6c4dc` | `ci: fail the job on any test failure, error, timeout or skipped test` |
 | 5 | `5cf87de` | `chore(handoff): separate base/code/pr-head/validated SHAs and the test-count tiers` |
 | 6 | `e042d66` | `fix(handoff): do not assume origin/main exists in the checkout` |
-| 7 | 本轮文档提交 | `docs: record the round-3 concurrency, CI-gate and schema findings` |
+| 7 | `11466c6` | `docs: record the round-3 concurrency, CI-gate and schema findings` |
 
 `code_sha`（最后一个改动代码的提交）= `e042d66`；其后仅 `docs/`。
 
