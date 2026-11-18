@@ -226,6 +226,19 @@ def catalog(_: bool = Depends(authenticated)):
     return {'environments': environments, 'problems': problems, 'schema': schema_status()}
 
 
+@app.get('/api/sessions')
+def session_list(_: bool = Depends(authenticated)):
+    """Read-only inventory of live viewer sessions.
+
+    Returns the public projection only: no tokens, no cookies, no filesystem paths, no worker
+    traceback. It deliberately does not touch ``last_seen``, so polling this endpoint can never
+    keep an abandoned session (and its worker process) alive.
+    """
+    return {'sessions': manager.list(), 'limit': manager.limit,
+            'idle_seconds': manager.idle_seconds,
+            'viewer': manager.viewer}
+
+
 @app.post('/api/sessions')
 def new_session(values: StartSession, _: bool = Depends(authenticated)):
     try:
@@ -291,11 +304,15 @@ async def session_stream(sid: str, _: bool = Depends(authenticated)):
         session = manager.get(sid)
     except KeyError as exc:
         badrequest(exc)
+    if not session.is_active():
+        # Fail fast instead of handing the browser an empty stream it would wait on forever.
+        raise HTTPException(status_code=409, detail='Simulation worker is not running')
 
     async def gen():
         seq = 0
         # Rendering is only enabled while at least one MJPEG client is attached; a session
-        # whose browser went away must not keep a software rasteriser busy.
+        # whose browser went away must not keep a software rasteriser busy. subscribe() is a
+        # no-op on a session that closed in the meantime, so a late client cannot revive it.
         session.subscribe()
         try:
             while True:
