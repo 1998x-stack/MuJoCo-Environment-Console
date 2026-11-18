@@ -133,11 +133,15 @@ cgroup `pids.current` 统计的是**任务（线程）**，不是进程。优化
 
 ## 4. 回归测试覆盖度
 
-| 环境 | 命令 | 结果 |
+| 档位 | 命令 | 结果 |
 |---|---|---|
-| 轻量依赖（CI 第一个 job） | `pip install fastapi uvicorn httpx pytest jsonschema` + `pytest -q` | 54 passed, 1 skipped（新增的严格模式守门测试按设计 skip） |
-| 完整依赖（已构建镜像内） | `pytest -q` | **55 passed**（含全部依赖 MuJoCo/Gymnasium 的集成测试） |
+| 轻量依赖（CI job 1，无 MuJoCo） | `pip install fastapi uvicorn httpx pytest jsonschema` + `pytest -q` | **50 passed, 5 skipped**（4 个依赖 MuJoCo 的集成测试 + 守门测试按预期 skip） |
+| 完整镜像但非严格模式 | 镜像内 `pytest -q` | 54 passed, 1 skipped（物理测试已真实执行，仅守门测试 skip） |
 | 严格模式（CI 新增 step） | `CONSOLE_TEST_REQUIRE_PHYSICS=1 pytest -q -rs` | **55 passed, 0 skipped** |
+
+> **修正记录（2026-11-18 第三轮追加）**：本表原文把「54 passed, 1 skipped」标为「轻量依赖（CI 第一个 job）」。
+> 真值：轻量 job（无 numpy/MuJoCo）为 `50 passed, 5 skipped`；`54 passed, 1 skipped` 对应**完整镜像非严格**模式。
+> 依据：CI run 44257891758 日志、`environment.json.ci_lightweight_unit_tests`、以及本地在两种镜像下的实测。
 
 新增能力：集成测试改用 `require()`，当 `CONSOLE_TEST_REQUIRE_PHYSICS=1` 时
 **依赖缺失会直接 fail 而不是静默 skip**，CI 里新增的 step 会执行它并断言 `skipped == 0`。

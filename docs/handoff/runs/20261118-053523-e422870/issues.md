@@ -158,8 +158,14 @@ SAC 1000 步、评估 58/62/64；两者 checkpoint 与隔离策略回放均通�
 
 ### 结果
 
-本地复刻 CI 依赖（`python:3.12-slim` + 同款 pip 集合）：严格模式 **55 passed, 0 skipped**；
-轻量模式 54 passed, 1 skipped（守门测试按设计 skip）。
+本地复刻 CI 依赖（同款 pip 集合，无 numpy/MuJoCo）：轻量模式 **50 passed, 5 skipped**
+（4 个集成测试 + 守门测试按设计 skip，与 CI job 1 日志一致）；
+完整镜像内严格模式 **55 passed, 0 skipped**。
+
+> **修正记录（2026-11-18 第三轮追加）**：原文写作「轻量模式 54 passed, 1 skipped」，
+> 该数字实际是**完整镜像非严格模式**（物理测试真实执行、仅守门测试 skip），并非轻量 job；
+> 轻量 job 真值为 `50 passed, 5 skipped`（依据：CI run 44257891758 日志与
+> `environment.json.ci_lightweight_unit_tests`）。三档总数同为 55，仅 skip 集合不同。
 
 ---
 

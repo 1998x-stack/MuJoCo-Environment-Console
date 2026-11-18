@@ -45,13 +45,18 @@ MJCF 入口 XML 必须 `.xml` 结尾且 `resolve()` 后仍位于该环境目录�
 | severity | 含义 | 例子（`reason`） |
 |---|---|---|
 | `error` | 环境**不会被列出** | `missing_manifest`、`invalid_manifest_json`、`manifest_not_an_object`、`invalid_directory_name`、`missing_xml`、`xml_outside_environment`、`invalid_xml_field`、`unsupported_kind`、`invalid_gym_id`、`invalid_registration_module`、`manifest_is_symlink`、`internal_error` |
-| `warning` | 环境**仍可用**，但 manifest 不符合 schema | `schema_violation`（用 `schemas/environment.schema.json` 校验，由 `jsonschema` 提供，缺失时自动跳过） |
+| `warning` | 环境**仍可用**，但 manifest 不符合 schema | `schema_violation`（用 `schemas/environment.schema.json` 校验，由 `jsonschema` 提供） |
 
-- `GET /api/catalog` 返回 `{"environments": [...], "problems": [...]}`，前端在环境目录下方用角落提示
-  展示问题摘要（`textContent`，无 XSS 风险）。
+> **校验必须真的生效**：schema 文件随镜像发布（`Dockerfile` 的 `COPY schemas ./schemas`，
+> 且 `.dockerignore` **不得**排除 `schemas/`）。若 schema 不可用，`GET /api/catalog` 的
+> `schema.available` 为 `false` 并给出 `reason`，lifespan 也会打 WARNING——
+> **不允许**让「校验关闭」与「目录干净」看起来一样（MJC-P3-110 的教训）。
+
+- `GET /api/catalog` 返回 `{"environments": [...], "problems": [...], "schema": {"available", "path", "reason"}}`，
+  前端在环境目录下方用角落提示展示问题摘要（`textContent`，无 XSS 风险）。
 - 服务启动时在 lifespan 中把每个 problem 以 warning 写进容器日志。
-- `scripts/validate_manifests.py` 在 CI 中用同一套 `scan()` 校验仓库自带的 `envs/`，
-  并额外做 JSON Schema 校验（任何 problem 即失败）。
+- `scripts/validate_manifests.py` 在 CI 中既在 runner 上跑，也**在镜像内不挂载仓库**跑
+  （挂载时 `import app` 指向仓库副本，验不到镜像自带内容）；任何 problem 即失败。
 
 `app/env_factory.make_environment(descriptor, render, width, height)` 统一构造环境。
 `kind='gym'` 走 `gym.make(gym_id, render_mode='rgb_array', width=..., height=...)`；
@@ -72,8 +77,10 @@ MJCF 入口 XML 必须 `.xml` 结尾且 `resolve()` 后仍位于该环境目录�
 
 ```text
 POST /api/sessions          → SessionManager.start() → ViewerSession（spawn 子进程）
+GET  /api/sessions          → 只读清单（公开投影；不刷新 last_seen，轮询不会给会话续命）
 GET  /api/sessions/{id}     → 状态快照（state/mode/paused/steps/episodes/reward/error/subscribers/render/fps/width/height）
-GET  /api/sessions/{id}/stream → MJPEG（长连接，服务端逐帧推送；进入时 subscribe，断开时 unsubscribe）
+GET  /api/sessions/{id}/stream → MJPEG（长连接，服务端逐帧推送；进入时 subscribe，断开时 unsubscribe；
+                               worker 已退出时返回 409 而不是空流）
 POST /api/sessions/{id}/{reset|pause|driver|stop}
 ```
 
@@ -81,9 +88,14 @@ POST /api/sessions/{id}/{reset|pause|driver|stop}
 
 viewer 子进程**只在有订阅者时才创建光栅化器**：
 
-- `ViewerSession.subscribe()` / `unsubscribe()` 维护引用计数，仅在 0→1 与 1→0 时下发 `{'op':'render'}`；
+- 渲染真值是会话与 worker **共享的 `multiprocessing.Event`**（`render_requested`），
+  与订阅计数在**同一把锁内** set/clear；worker 每循环重读并写进 `runtime.render`。
+  它**不**走命令队列：旧实现经 `commands` 下发开关，交错时会「无人观看仍在渲染」或
+  「有人观看却冻结」，队列满时开关直接丢失（第三轮 MJC-P1-201，已用竞态复现证明）。
+- 历史遗留的 `{'op':'render'}` 命令被**显式忽略**，防止队列里的陈旧命令与事件打架。
+- 已 `close()` 或 worker 已退出的会话，`subscribe()` 是 no-op：**死会话不会被晚到的客户端复活**。
 - MJPEG 端点的 async generator 在开始时 subscribe、在 `finally` 中 unsubscribe，因此浏览器关闭/
-  刷新/切换环境都会自动停止渲染；
+  刷新/切换环境都会自动停止渲染（实测：断开后容器 CPU 169.5% → 1.6%）；
 - 无人订阅时物理仍按 `VIEWER_FPS` 步进、状态继续上报，UI 仍能看到步数增长，控制指令也照常生效；
 - **程序化消费 `wait_frame()` 的代码必须先 `subscribe()`**（否则永远收不到帧——
   `scripts/training_smoke_test.py` 就是范例，早期版本漏了两行导致回归）。

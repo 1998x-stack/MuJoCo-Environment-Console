@@ -35,8 +35,8 @@
   "environment_tests_total": 18,
   "environment_tests_passed": 18,
   "api_tests": "PASS",
-  "unit_tests_full_image": "55 passed, 0 skipped",
-  "unit_tests_lightweight": "54 passed, 1 skipped",
+  "unit_tests_full_image": "55 passed, 0 skipped (strict, CONSOLE_TEST_REQUIRE_PHYSICS=1)",
+  "unit_tests_lightweight": "50 passed, 5 skipped (CI job 1, no numpy/MuJoCo: 4 integration tests skip as expected)",
   "unit_tests_strict": "55 passed, 0 skipped",
   "browser_tests": "PASS",
   "browser_assertions_passed": 48,
@@ -129,5 +129,27 @@
   "ci_strict_suite": "55 passed, 0 skipped (enforced by the new CI step)",
   "ci_manifest_validation": "3/3 manifests valid; discovery: 18 environments, 0 problem(s)",
   "ci_mjpeg_framing": "MJPEG framing OK: 57 CRLF-delimited boundaries",
-  "ci_environment_tests": "18/18 passed in CI"
+  "ci_environment_tests": "18/18 passed in CI",
+  "code_sha": "f642f2fa5b6bbe4cdc97fc07d73c68cefbd5e2d1",
+  "pr_head_sha": "8f3e435816572c0db5fabc4880095ca47fc0412a",
+  "validated_sha": "f642f2fa5b6bbe4cdc97fc07d73c68cefbd5e2d1",
+  "ci_run_id": "44258359132",
+  "sha_taxonomy_note": "code_sha is the last commit that changed non-doc files; pr_head_sha (8153590/8f3e435) are documentation-only commits, so both CI runs validated the same code state as code_sha. Derived with scripts/handoff_metadata.py.",
+  "unit_tests_full_image_non_strict": "54 passed, 1 skipped (physics tests run, guard test skips by design)",
+  "corrections": [
+    {
+      "date": "2026-11-18",
+      "field": "unit_tests_lightweight",
+      "was": "54 passed, 1 skipped (mislabelled: that figure is the full image in non-strict mode)",
+      "now": "50 passed, 5 skipped (matches the CI job-1 log and ci_lightweight_unit_tests)",
+      "evidence": "CI run 44257891758 log; local re-measurement in both dependency sets"
+    },
+    {
+      "date": "2026-11-18",
+      "field": "final_sha vs code_sha",
+      "was": "8153590 described as the code tip although it only touches docs/",
+      "now": "code_sha=f642f2f; 8153590 and 8f3e435 are documentation-only",
+      "evidence": "git show --name-only per commit; scripts/handoff_metadata.py"
+    }
+  ]
 }

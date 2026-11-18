@@ -169,6 +169,13 @@
 | 7 | `8153590` | `docs: record the viewer resource investigation, runbook and handoff` |
 | 8 | 本次提交 | `docs: backfill the round-2 CI run and final SHA` |
 
-代码 tip：`8153590d51da59a81f9fb0ffaa84939d0fcbc0f4`（`8153590`）。CI 日志确认：`strict suite OK: 55 passed`（0 skipped）、
+代码 tip（即 `code_sha`）：`f642f2fa5b6bbe4cdc97fc07d73c68cefbd5e2d1`（`f642f2f`）。
+
+> **修正记录（2026-11-18 第三轮追加）**：原文将 `8153590` 称为「代码 tip」，但该提交只改 `docs/`；
+> 最后一个改动代码的提交是 `f642f2f`，其后两个提交（`8153590`、`8f3e435`）均为纯文档，
+> 代码状态与 `f642f2f` 完全一致，因此两个 CI run 验证的是同一份代码。
+> 判定依据：`git show --name-only` 逐提交文件分类（`scripts/handoff_metadata.py` 可复现）。
+
+CI 日志确认：`strict suite OK: 55 passed`（0 skipped）、
 `3/3 manifests valid`、`discovery: 18 environments (3 custom), 0 problem(s)`、
 `MJPEG framing OK: 57 CRLF-delimited boundaries`、`18/18 environments passed`。

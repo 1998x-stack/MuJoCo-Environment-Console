@@ -72,10 +72,23 @@ python scripts/validate_manifests.py          # schema + 发现诊断（需要 j
 python -m pytest -q
 
 # 完整测试（含依赖 MuJoCo 的集成测试）。CONSOLE_TEST_REQUIRE_PHYSICS=1 会把
-# 「依赖缺失」从 skip 变成 fail，CI 用它保证集成测试真的执行：
+# 「依赖缺失」从 skip 变成 fail，CI 用它保证集成测试真的执行。镜像内没有 git，
+# 而 tests/test_handoff_metadata.py 会建临时仓库，所以要先装 git（不装会 fail，不会 skip）：
 docker run --rm --user 0:0 -e HOME=/tmp -e CONSOLE_TEST_REQUIRE_PHYSICS=1 \
   -v "$PWD":/work -w /work mujoco-environment-console:local \
-  sh -c 'pip install --quiet httpx pytest jsonschema && python -m pytest -q -rs -p no:cacheprovider'
+  sh -c 'export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && \
+         apt-get install -y -qq --no-install-recommends git && \
+         git config --global --add safe.directory /work && \
+         pip install --quiet httpx pytest jsonschema && \
+         python -m pytest -q -rs -p no:cacheprovider'
+
+# 镜像自带内容（必须**不挂载**仓库，否则 import app 指向仓库副本，验不到镜像）
+docker run --rm mujoco-environment-console:local python scripts/validate_manifests.py
+docker run --rm mujoco-environment-console:local python -c \
+  "from app import catalog; s = catalog.schema_status(); assert s['available'], s; print(s)"
+
+# CI 门禁（读 JUnit XML；用于本地复现 CI 的判定）
+python scripts/check_pytest_report.py .artifacts/ci-pytest/junit.xml /tmp/pytest.log
 
 # 部署（唯一受支持的入口，会生成 .env、构建镜像、等待健康检查）
 bash scripts/deploy.sh
@@ -87,11 +100,15 @@ docker compose exec -T console python scripts/smoke_test.py --render --all
 docker compose exec -T console python scripts/training_smoke_test.py
 ```
 
-宿主机缺少 `python3-venv` 时，用镜像跑测试而不污染系统 Python：
+宿主机缺少 `python3-venv` 时，用镜像跑测试而不污染系统 Python（注意同样需要 git）：
 
 ```bash
 docker run --rm --user 0:0 -e HOME=/tmp -v "$PWD":/work -w /work mujoco-environment-console:local \
-  sh -c 'pip install --quiet httpx pytest jsonschema && python -m pytest -q -p no:cacheprovider'
+  sh -c 'export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && \
+         apt-get install -y -qq --no-install-recommends git && \
+         git config --global --add safe.directory /work && \
+         pip install --quiet httpx pytest jsonschema && \
+         python -m pytest -q -p no:cacheprovider'
 ```
 
 ## 6. 数据与安全约束
@@ -153,6 +170,10 @@ docker run --rm --user 0:0 -e HOME=/tmp -v "$PWD":/work -w /work mujoco-environm
 - [ ] 真实运行验证（不是只读代码或只看 CI 绿灯）。
 - [ ] 新增/修改行为有回归测试，或说明为何无法测试。
 - [ ] `python -m pytest -q` 全绿；涉及环境时 `smoke_test.py --render --all` 全绿。
+      给结论标注版本时只能引用 `code_sha`/`validated_sha`，测试计数必须写明档位
+      （轻量 / 完整非严格 / 严格），见 `docs/handoff/README.md`。
+- [ ] 新增或修改了随镜像发布的目录时，核对 `.dockerignore` 与 `Dockerfile` 的 `COPY`，
+      并在**不挂载仓库**的前提下验证镜像自带内容。
 - [ ] 涉及 viewer 行为时，同时用真实 API + 真实 MJPEG 订阅验证（`subscribe/unsubscribe` 计数与 `render` 状态），不能只依赖单元测试替身。
 - [ ] 涉及性能/资源结论时，必须给出修改前后的可比较数据（cgroup `cpu.stat` 采样，而不是 `docker stats` 的瞬时值）。
 - [ ] 涉及训练/回放时，PPO 与 SAC 的端到端路径均通过。

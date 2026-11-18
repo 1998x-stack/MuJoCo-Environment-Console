@@ -10,7 +10,8 @@
 | L0 | Python/JS/Shell/JSON 语法 | `compileall`、`node --check`、`bash -n`、`json.tool` | PASS | 本轮终端输出 |
 | L0 | manifest schema + 发现诊断 | `python scripts/validate_manifests.py` | PASS（3/3，0 problem） | 终端输出 |
 | L0 | 单元/集成测试（完整依赖） | 部署镜像内 `pytest -q` | **PASS 55 passed, 0 skipped** | `pytest-final.log` |
-| L0 | 轻量依赖（CI job 1 等价） | `python:3.12-slim` + 同款 pip 集合 | PASS 54 passed, 1 skipped | 本轮终端输出 |
+| L0 | 轻量依赖（CI job 1 等价，无 numpy/MuJoCo） | 同款 pip 集合（fastapi uvicorn httpx pytest jsonschema） | **PASS 50 passed, 5 skipped**（集成测试按预期 skip） | CI run 44257891758 日志、`environment.json.ci_lightweight_unit_tests` |
+| L0 | 完整镜像但**非**严格模式 | 部署镜像内 `pytest -q`（未设 `CONSOLE_TEST_REQUIRE_PHYSICS`） | PASS 54 passed, 1 skipped（守门测试按设计 skip） | 本轮终端输出 |
 | L0 | 严格模式（CI 新增 step 等价） | `CONSOLE_TEST_REQUIRE_PHYSICS=1 pytest -q -rs` | **PASS 55 passed, 0 skipped** | 本轮终端输出 |
 | L1 | 认证/校验/限流/viewer 上限 | `.artifacts/l1_api_test.sh` | **PASS（0 失败）** | `l1-final.log` |
 | L2 | 18 环境 reset/step/render | `smoke_test.py --render --all` | **PASS 18/18** | `smoke-test-after.log` |
@@ -51,9 +52,33 @@ Cookie 只存在于抓流进程与容器内 `/tmp/jar`；命令行、日志、Gi
 | 指标 | 上一轮 | 本轮 |
 |---|---|---|
 | 单元/集成测试（完整依赖） | 23 passed | **55 passed** |
-| 单元测试（轻量依赖） | 19 passed, 4 skipped | 54 passed, 1 skipped |
+| 单元测试（轻量依赖，无 MuJoCo） | 19 passed, 4 skipped | **50 passed, 5 skipped** |
+| 单元测试（完整镜像，非严格） | 无此档位记录 | 54 passed, 1 skipped |
 | 严格模式 | 无此机制 | **55 passed, 0 skipped（CI 强制）** |
 | 环境 smoke | 18/18 | 18/18 |
 | 浏览器断言 | 48 | 48 |
 | 3 viewer 容器任务数 | 142 | **42** |
 | 3 viewer CPU | 860% | **549%** |
+
+## 5. 版本标注（SHA 分类）
+
+| 字段 | 值 |
+|---|---|
+| `base_sha` | `e422870481d68dd20feeb4e36538ee57306b97e8` |
+| `code_sha`（最后一个改动代码的提交，行为被验证的版本） | `f642f2fa5b6bbe4cdc97fc07d73c68cefbd5e2d1`（`f642f2f`，CI 严格 step） |
+| `pr_head_sha` | `8f3e435816572c0db5fabc4880095ca47fc0412a`（`8f3e435`，docs backfill） |
+| `validated_sha` | `f642f2f`（CI run 2 与本地全部回归均在该代码状态下取得） |
+| `ci_run_id` | `44258359132`（on `8f3e435`）、`44257891758`（on `8153590`） |
+
+说明：`8153590` 与 `8f3e435` 均为**仅文档**提交，代码状态与 `f642f2f` 完全一致；
+两个 CI run 因此验证的是同一份代码。
+
+## 6. 修正记录（2026-11-18 第三轮追加，原文保留不改）
+
+| 项 | 原记录（错误） | 真值 | 判定依据 |
+|---|---|---|---|
+| 测试计数档位标注 | 「轻量依赖（CI job 1 等价）… 54 passed, 1 skipped」 | 轻量 job 真值为 **50 passed, 5 skipped**；`54 passed, 1 skipped` 是**完整镜像非严格**模式 | CI run 44257891758 日志与 `environment.json.ci_lightweight_unit_tests`；两者总数同为 55 但 skip 集合不同 |
+| 版本标注 | 将 `8153590` 称为「代码 tip」 | 代码 tip 是 `f642f2f`；`8153590`/`8f3e435` 仅改 docs | `git show --name-only` 逐提交文件分类（`scripts/handoff_metadata.py` 可复现） |
+
+原因：当时把「最近一次本地运行」按名称直接对应到 CI job，未核对 skip 集合；
+且以分支 HEAD 代替了代码 HEAD。已在 `docs/handoff/README.md` 增加强制字段与档位表。

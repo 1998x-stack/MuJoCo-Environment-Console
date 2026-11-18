@@ -34,6 +34,9 @@ bash scripts/deploy.sh
 - **按需渲染**：只在有浏览器连接时才渲染。无人观看的会话 CPU 从约 5 核降到约 0.015 核，仍保持物理步进与状态上报；每个 viewer 的光栅化/BLAS 线程数受控，避免默认线程池按核数空转。
 - **强化学习**：PPO、SAC；训练日志、进度、评估结果、模型保存和策略回放。PPO 使用完整 rollout batch，实际步数可能向上取整（例如请求 1,000 步时默认 rollout 可能执行 2,048 步）；界面同时展示请求步数与实际完成步数。
 - **资源保护**：限制并发查看器、单训练任务、空闲会话回收、按需渲染与 viewer 线程预算，以及服务退出时的 worker 清理。实测 3 个并发查看器从约 860% CPU 降到约 549%，线程数从 142 降到 42。
+- **会话可观测**：`GET /api/sessions` 只读列出存活 viewer 会话（订阅数、渲染开关、存活状态、空闲秒数），
+  不刷新空闲计时；用于排查被遗弃会话占用查看器槽位。`GET /api/catalog` 除环境与问题列表外，
+  还报告 manifest Schema 校验是否真的生效（`schema.available`）。
 
 当前固定 MuJoCo 3.3.7 与 Gymnasium Robotics 1.4.2；不要单独升级 MuJoCo 大版本，升级前必须通过全部 Fetch 环境、渲染和训练 CI。
 
@@ -141,3 +144,12 @@ bash scripts/import_menagerie.sh
 ## 验证
 
 GitHub Actions 执行 Python 单元测试、JavaScript/Shell 语法检查、Manifest Schema 校验，以及 Docker 镜像构建和容器内物理仿真/渲染/训练 smoke tests。真实目标服务器仍需验证其 CPU、内存、驱动、端口和局域网访问条件。
+
+CI 的结果不是靠管道后的 `tee` 状态或 `"passed"` 字符串判定的：严格 step 在 `set -euo pipefail` 下
+运行，把 JUnit XML 交给 `scripts/check_pytest_report.py`，任何 failed / error / skipped、或必测的
+物理集成测试没真的执行，都会使 job 失败（故意失败 / 故意 skip / 收集失败 / 超时的场景已逐个自检）。
+CI 还会**在镜像内不挂载仓库**地校验镜像自带内容（`schemas/` 与 `envs/`），因为挂载时
+`import app` 指向仓库副本，验不到镜像本身。当前严格套件为 **93 passed, 0 skipped**。
+
+本地验证参见 `docs/verification/`（部署与分层验证、viewer 资源优化、并发与 CI 门禁），
+交接记录见 `docs/handoff/latest.md`。
