@@ -21,6 +21,7 @@
 | L4 | 并发限制/取消/训练中重启/持久化 | `.artifacts/l4b_training_lifecycle.sh` | **PASS（0 失败）** | `l4b-after.log` |
 | L5 | 重复创建销毁/3 viewer/优雅停止/重启 | `.artifacts/l5_stability.sh` | **PASS（0 失败）** | `l5-final.log` |
 | L5 | 递归/长时间稳定性 | 未获授权 | **NOT_RUN** | — |
+| CI | GitHub Actions 全流程 | [run 44257891758](https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44257891758) | **PASS** | 轻量 50 passed/5 skipped；严格 step `strict suite OK: 55 passed`（0 skipped）；`3/3 manifests valid`、`0 problem(s)`；`MJPEG framing OK: 57 boundaries`；`18/18 environments passed` |
 
 ## 2. 本轮新增的资源对照实验
 

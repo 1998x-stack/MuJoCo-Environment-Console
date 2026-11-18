@@ -3,11 +3,11 @@
   "agent": "pi (viewer resource optimisation / round 2)",
   "repo": "1998x-stack/MuJoCo-Environment-Console",
   "base_sha": "e422870481d68dd20feeb4e36538ee57306b97e8",
-  "final_sha": "PENDING_COMMIT",
+  "final_sha": "8153590d51da59a81f9fb0ffaa84939d0fcbc0f4",
   "remote_main_sha_at_start": "f64bc8f5319754e3228bf626804ba408518c5171",
   "pr": "https://github.com/1998x-stack/MuJoCo-Environment-Console/pull/1",
   "branch": "agent/local-deploy-20261118-1058",
-  "ci_run": "PENDING",
+  "ci_run": "https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44257891758",
   "host_type": "physical-ubuntu-server",
   "os": "Ubuntu 24.04.3 LTS (noble)",
   "kernel": "7.0.0-38-generic",
@@ -41,17 +41,37 @@
   "browser_tests": "PASS",
   "browser_assertions_passed": 48,
   "training_tests": "PASS",
-  "ppo": {"status": "PASS", "requested_steps": 1000, "actual_steps": 2048,
-          "eval_returns": [28.0, 30.0, 28.0], "checkpoint_and_isolated_replay": "PASS"},
-  "sac": {"status": "PASS", "requested_steps": 1000, "actual_steps": 1000,
-          "eval_returns": [58.0, 62.0, 64.0], "checkpoint_and_isolated_replay": "PASS"},
+  "ppo": {
+    "status": "PASS",
+    "requested_steps": 1000,
+    "actual_steps": 2048,
+    "eval_returns": [
+      28.0,
+      30.0,
+      28.0
+    ],
+    "checkpoint_and_isolated_replay": "PASS"
+  },
+  "sac": {
+    "status": "PASS",
+    "requested_steps": 1000,
+    "actual_steps": 1000,
+    "eval_returns": [
+      58.0,
+      62.0,
+      64.0
+    ],
+    "checkpoint_and_isolated_replay": "PASS"
+  },
   "third_party_mjpeg": {
     "ffmpeg_file_decoded_frames": 60,
     "ffmpeg_file_reported_stream": "mjpeg (Baseline) 640x480",
     "ffmpeg_live_http_decoded_frames": 60,
     "ffmpeg_live_http_fps": 12,
     "opencv_decoded_frames": 60,
-    "opencv_frame_sizes": ["640x480"],
+    "opencv_frame_sizes": [
+      "640x480"
+    ],
     "boundary_errors": 0
   },
   "viewer_resource_before": {
@@ -75,8 +95,8 @@
     "three_viewers_streaming_core_percent": 549.3,
     "three_viewers_container_tasks": 42,
     "threads_per_worker": 8,
-    "one_viewer_streaming_fps": 10.90,
-    "three_viewers_fps_each": 11.30,
+    "one_viewer_streaming_fps": 10.9,
+    "three_viewers_fps_each": 11.3,
     "reduction_no_subscriber_percent": 99.7,
     "reduction_single_streaming_percent": 68.1,
     "reduction_three_streaming_percent": 36.1
@@ -103,5 +123,11 @@
   "long_running_stability": "NOT_RUN",
   "third_party_lan_client": "NOT_RUN",
   "convergence": "NOT_RUN",
-  "gpu_tests": "NOT_RUN"
+  "gpu_tests": "NOT_RUN",
+  "ci_result": "success (2m37s)",
+  "ci_lightweight_unit_tests": "50 passed, 5 skipped (expected skips)",
+  "ci_strict_suite": "55 passed, 0 skipped (enforced by the new CI step)",
+  "ci_manifest_validation": "3/3 manifests valid; discovery: 18 environments, 0 problem(s)",
+  "ci_mjpeg_framing": "MJPEG framing OK: 57 CRLF-delimited boundaries",
+  "ci_environment_tests": "18/18 passed in CI"
 }

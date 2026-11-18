@@ -7,11 +7,11 @@
 - Host type: Ubuntu 24.04.3 LTS 物理服务器（本机执行；同机另有 27 个业务容器）
 - OS: Ubuntu 24.04.3 LTS (noble), kernel 7.0.0-38-generic, x86_64, 12 逻辑线程, 31 GiB
 - Base SHA: `e422870481d68dd20feeb4e36538ee57306b97e8`（= PR #1 HEAD；`origin/main` 仍为 `f64bc8f`）
-- Final local SHA: `PENDING_COMMIT`（提交后回填；其在 PR #1 分支上）
+- Final local SHA: `8153590d51da59a81f9fb0ffaa84939d0fcbc0f4`（代码 tip；其后仅文档元数据提交）
 - Remote main SHA: `f64bc8f5319754e3228bf626804ba408518c5171`（PR #1 尚未合并）
 - Branch: `agent/local-deploy-20261118-1058`（按指示继续在 PR #1 分支协作，未从旧 main 重做）
 - PR: https://github.com/1998x-stack/MuJoCo-Environment-Console/pull/1
-- CI run: `PENDING`（推送后填写）
+- CI run（代码 tip `8153590`）: https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44257891758 — **success**（2m37s）
 
 ## Current State
 
@@ -34,7 +34,7 @@
 | Session cleanup / restart | **PASS** | 10 次创建销毁无累积；优雅停止 6–7 s；重启后 healthy |
 | Catalog diagnostics | **PASS** | 坏环境以结构化 `problems` 上报，控制台仍可用；仓库自带 envs 零问题 |
 | Resource limits | **PASS（opt-in）** | `CONSOLE_CPU_LIMIT` / `CONSOLE_MEM_LIMIT` 默认不限制 |
-| CI (GitHub Actions) | `PENDING` | 推送后确认，重点是新的「严格测试套件」step |
+| CI (GitHub Actions) | **PASS** | [run 44257891758](https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44257891758)：严格 step `strict suite OK: 55 passed`（0 skipped）、`3/3 manifests valid`、`0 problem(s)`、`MJPEG framing OK: 57 boundaries`、`18/18 environments passed` |
 | Long-run stability | **NOT_RUN** | 未获授权（会影响同机其他业务容器） |
 | Third-party LAN **device** | **NOT_RUN** | 无可用设备 |
 | Convergence | **NOT_RUN** | 需授权与算力预算 |
@@ -143,7 +143,7 @@ AGENTS.md / README.md / docs/**  见 changes.md
 
 ## Exact Next Steps
 
-1. 回填 `Final local SHA` / `CI run`，确认 CI 全绿（重点：严格测试 step 输出 `0 skipped`）。
+1. ~~回填 `Final local SHA` / `CI run`，确认 CI 全绿~~ → **已完成**：CI success，严格 step 输出 `55 passed` 且 0 skipped。
 2. NS-2：用同局域网另一台设备完成真实浏览器验收，并记录连接期间的 viewer CPU。
 3. NS-3：新增只读 `GET /api/sessions`，缓解被遗弃会话占用槽位的问题。
 4. NS-6：收敛 uvicorn 默认线程池（可选，属优化而非缺陷）。

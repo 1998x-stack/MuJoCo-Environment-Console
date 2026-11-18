@@ -2,7 +2,9 @@
 
 - `BASE_SHA`：`e422870481d68dd20feeb4e36538ee57306b97e8`（PR #1 HEAD）
 - 分支：`agent/local-deploy-20261118-1058`（继续 PR #1）
-- `final_sha`：提交后回填（见文末提交表）
+- `final_sha`（本轮代码 tip）：`8153590d51da59a81f9fb0ffaa84939d0fcbc0f4`
+- PR：https://github.com/1998x-stack/MuJoCo-Environment-Console/pull/1
+- CI：https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44257891758（success，2m37s）
 
 ## 1. 代码变更
 
@@ -158,11 +160,15 @@
 
 | # | Commit | 说明 |
 |---|---|---|
-| 1 | `<pending>` | `perf: render viewer frames only while a client is subscribed` |
-| 2 | `<pending>` | `perf: cap viewer rasteriser and BLAS thread pools` |
-| 3 | `<pending>` | `feat: make viewer fps, resolution and container caps configurable` |
-| 4 | `<pending>` | `feat: report diagnosable catalog problems instead of skipping folders` |
-| 5 | `<pending>` | `fix: explain SIGKILL/OOM trainer exits` |
-| 6 | `<pending>` | `test: cover subscriber-driven rendering, thread budgets and catalog diagnostics` |
-| 7 | `<pending>` | `ci: run the full suite in the deployed image and forbid skips` |
-| 8 | `<pending>` | `docs: record viewer resource investigation, runbook and handoff` |
+| 1 | `10206e4` | `perf(viewer): render on demand and cap the rasteriser thread pools` |
+| 2 | `6a7735f` | `feat: make viewer fps, resolution and container limits configurable` |
+| 3 | `02243dc` | `feat(catalog): report diagnosable environment problems instead of skipping silently` |
+| 4 | `ec00453` | `fix(jobs): explain SIGKILL/OOM trainer exits` |
+| 5 | `66685a6` | `test: cover subscriber-driven rendering, thread budgets and catalog diagnostics` |
+| 6 | `f642f2f` | `ci: run the full suite in the deployed image and forbid skips` |
+| 7 | `8153590` | `docs: record the viewer resource investigation, runbook and handoff` |
+| 8 | 本次提交 | `docs: backfill the round-2 CI run and final SHA` |
+
+代码 tip：`8153590d51da59a81f9fb0ffaa84939d0fcbc0f4`（`8153590`）。CI 日志确认：`strict suite OK: 55 passed`（0 skipped）、
+`3/3 manifests valid`、`discovery: 18 environments (3 custom), 0 problem(s)`、
+`MJPEG framing OK: 57 CRLF-delimited boundaries`、`18/18 environments passed`。
