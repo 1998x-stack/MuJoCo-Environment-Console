@@ -1,5 +1,5 @@
 'use strict';
-const state = {envs:[], selected:null, session:null, runs:[], filter:'all', timer:null, selectedRun:null, busy:false, runsSignature:null};
+const state = {envs:[], selected:null, session:null, runs:[], filter:'all', timer:null, selectedRun:null, busy:false, trainingBusy:false, runsSignature:null};
 const $ = (s)=>document.querySelector(s);
 const esc = (v)=>String(v??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 let toastTimer;
@@ -17,9 +17,10 @@ function showLogin(){
   $('#application').hidden=true;
   clearInterval(state.timer);
   state.timer=null;
+  state.runsSignature=null;updateTelemetry(null);
 }
 function showApp(){$('#loginCover').hidden=true;$('#application').hidden=false;}
-function iconFor(e){if(e.id.startsWith('fetch:'))return '🦾';if(e.id.startsWith('custom:'))return '⚙';return ({'Locomotion':'◈','Control':'◉','Manipulation':'◎','Humanoid':'♙'})[e.category]||'⌘';}
+function iconFor(e){if(e.id.startsWith('fetch:'))return 'FR';if(e.id.startsWith('custom:'))return 'MJ';return ({'Locomotion':'LM','Control':'CT','Manipulation':'RB','Humanoid':'HM'})[e.category]||'MJ';}
 function renderCategoryTabs(){const categories=[...new Set(state.envs.map(e=>e.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'zh-CN'));const label=(c)=>({'Locomotion':'运动','Control':'控制','Manipulation':'机械臂','Humanoid':'人形','Fetch Robotics':'Fetch 机器人','Custom Control':'自定义控制','Custom Scene':'自定义场景','Custom':'自定义'})[c]||c;$('#categoryTabs').innerHTML=[['all','全部'],...categories.map(c=>[c,label(c)])].map(([key,name])=>`<button data-filter="${esc(key)}" class="${state.filter===key?'active':''}" aria-pressed="${state.filter===key?'true':'false'}">${esc(name)}</button>`).join('');}
 function renderEnvs(){
  const query=$('#search').value.toLowerCase().trim();
@@ -40,7 +41,7 @@ function updateStepFeedback(){
  note.textContent=valid?'已设置 '+count.toLocaleString('zh-CN')+' 步':'请输入 1,000 至 5,000,000 之间的整数步数';
  document.querySelectorAll('[data-steps]').forEach(button=>button.setAttribute('aria-pressed',String(valid&&Number(button.dataset.steps)===count)));
  const e=state.selected;
- $('#startTraining').disabled=!valid||!e||e.trainable===false||state.busy;
+ $('#startTraining').disabled=!valid||!e||e.trainable===false||state.busy||state.trainingBusy;
  return valid;
 }
 function renderDriverState(mode){
@@ -91,8 +92,24 @@ async function syncSession(){
   updateTelemetry(s);
  }catch(e){console.warn(e);$('#viewerRender').textContent='状态暂不可用';}
 }
-function renderRuns(){const related=state.runs.filter(r=>!state.selected||r.env_id===state.selected.id);$('#runList').innerHTML=related.length?related.map(r=>{const ratio=Math.max(0,Math.min(100,100*Number(r.completed_steps||0)/Number(r.timesteps||1)));return `<div class="run-card"><div class="run-top"><strong>${esc(r.algorithm)} <small>#${esc(r.id.slice(0,7))}</small></strong><span class="pill ${esc(r.status)}">${esc(r.status)}</span></div><p>${esc(r.env_id)} · ${Number(r.completed_steps||0).toLocaleString()} / ${Number(r.timesteps).toLocaleString()} 步</p><progress class="bar" value="${ratio.toFixed(1)}" max="100"></progress><div class="run-actions"><button data-log="${esc(r.id)}">日志</button>${r.status==='completed'&&state.selected?.id===r.env_id?`<button data-replay="${esc(r.id)}">▶ 策略回放</button>`:''}${['starting','running'].includes(r.status)?`<button data-cancel="${esc(r.id)}">取消训练</button>`:''}</div>${r.average_reward!==null?`<p>平均奖励 / 评估：${Number(r.average_reward).toFixed(2)}</p>`:''}</div>`;}).join(''):'<div class="empty-runs">当前环境尚无训练记录</div>';}
-async function refreshRuns(){try{state.runs=(await api('/api/training')).runs;renderRuns();}catch(e){console.warn(e);}}
+function renderRuns(){
+ const related=state.runs.filter(r=>!state.selected||r.env_id===state.selected.id);
+ $('#runList').innerHTML=related.length?related.map(r=>{
+  const completed=Number(r.completed_steps||0),target=Number(r.timesteps||0);
+  const ratio=target>0?Math.max(0,Math.min(100,100*completed/target)):0;
+  const evaluation=r.average_reward!==null&&r.average_reward!==undefined&&Number.isFinite(Number(r.average_reward))?
+   `<p class="run-reward">评估平均奖励：${Number(r.average_reward).toFixed(2)}</p>`:'';
+  return `<article class="run-card" aria-label="训练任务 ${esc(r.id)}"><div class="run-top"><strong>${esc(r.algorithm)} <small>#${esc(r.id.slice(0,7))}</small></strong><span class="pill ${esc(r.status)}">${esc(r.status)}</span></div><p>${esc(r.env_id)} · ${completed.toLocaleString('zh-CN')} / ${target.toLocaleString('zh-CN')} 步</p><progress class="bar" value="${ratio.toFixed(1)}" max="100" aria-label="${esc(r.algorithm)} 训练目标步数进度"></progress><div class="run-actions"><button type="button" data-log="${esc(r.id)}" aria-label="查看 ${esc(r.algorithm)} 任务 ${esc(r.id.slice(0,7))} 的训练日志">查看日志</button>${r.status==='completed'&&state.selected?.id===r.env_id?`<button type="button" data-replay="${esc(r.id)}">▶ 策略回放</button>`:''}${['starting','running'].includes(r.status)?`<button type="button" data-cancel="${esc(r.id)}">取消训练</button>`:''}</div>${evaluation}</article>`;
+ }).join(''):'<div class="empty-runs">当前环境尚无训练记录</div>';
+}
+async function refreshRuns(){
+ try{
+  const runs=(await api('/api/training')).runs;
+  const signature=JSON.stringify(runs);
+  // Keep keyboard focus on run actions during idle polls; rebuild only on real changes.
+  if(signature!==state.runsSignature){state.runs=runs;state.runsSignature=signature;renderRuns();}
+ }catch(e){console.warn(e);}
+}
 function selectedAlgorithm(){return document.querySelector('input[name="algo"]:checked')?.value||'PPO';}
 async function init(){showApp();await refreshCatalog();await refreshRuns();if(!state.timer){state.timer=setInterval(async()=>{if(document.hidden)return;await Promise.all([syncSession(),refreshRuns()]);},2400);}}
 $('#loginForm').addEventListener('submit',async(e)=>{e.preventDefault();$('#loginError').textContent='';try{await api('/api/login','POST',{password:$('#password').value});$('#password').value='';await init();}catch(err){$('#loginError').textContent=err.message;}});
@@ -100,13 +117,31 @@ $('#logoutBtn').addEventListener('click',async()=>{await stopCurrent();try{await
 $('#refreshBtn').addEventListener('click',()=>refreshCatalog().catch(e=>toast(e.message)));
 $('#runsRefresh').addEventListener('click',()=>refreshRuns());
 $('#search').addEventListener('input',renderEnvs);
+$('#timesteps').addEventListener('input',updateStepFeedback);
+document.querySelector('.step-presets').addEventListener('click',e=>{
+ const button=e.target.closest('button[data-steps]');
+ if(!button)return;
+ $('#timesteps').value=button.dataset.steps;updateStepFeedback();$('#timesteps').focus();
+});
 $('#categoryTabs').addEventListener('click',(e)=>{const button=e.target.closest('button[data-filter]');if(!button)return;state.filter=button.dataset.filter;renderCategoryTabs();renderEnvs();});
 $('#envList').addEventListener('click',(e)=>{const b=e.target.closest('button[data-env]');if(b)selectEnv(b.dataset.env);});
 $('#randomBtn').addEventListener('click',()=>command('driver',{mode:'random'}));
 $('#policyBtn').addEventListener('click',()=>{const models=state.runs.filter(r=>r.status==='completed'&&r.env_id===state.selected?.id);if(models.length)command('driver',{mode:'policy',run_id:models[0].id});else toast('当前环境尚无已训练成功的模型。请先训练 PPO 或 SAC。');});
 $('#resetBtn').addEventListener('click',()=>command('reset'));
 $('#pauseBtn').addEventListener('click',async()=>{if(!state.session)return;let s=await api(`/api/sessions/${state.session.id}`);await command('pause',{paused:!s.paused});});
-$('#startTraining').addEventListener('click',async()=>{if(!state.selected)return;const count=Number($('#timesteps').value);if(!Number.isInteger(count)||count<1000||count>5000000){toast('步数必须是 1,000 至 5,000,000 的整数');return;}try{const run=await api('/api/training','POST',{env_id:state.selected.id,algorithm:selectedAlgorithm(),timesteps:count});toast('训练任务已启动：'+run.id.slice(0,8));await refreshRuns();}catch(err){toast('训练失败：'+err.message);}});
+$('#startTraining').addEventListener('click',async()=>{
+ if(!state.selected||state.trainingBusy||!updateStepFeedback())return;
+ const count=Number($('#timesteps').value);
+ state.trainingBusy=true;updateStepFeedback();
+ const button=$('#startTraining'),oldText=button.textContent;
+ button.textContent='正在提交训练任务…';
+ try{
+  const run=await api('/api/training','POST',{env_id:state.selected.id,algorithm:selectedAlgorithm(),timesteps:count});
+  toast('训练任务已启动：'+run.id.slice(0,8));
+  await refreshRuns();
+ }catch(err){toast('训练失败：'+err.message);}
+ finally{state.trainingBusy=false;button.textContent=oldText;updateStepFeedback();}
+});
 $('#runList').addEventListener('click',async(e)=>{const btn=e.target.closest('button');if(!btn)return;try{if(btn.dataset.replay){if(!state.session){toast('请先启动环境');return;}await command('driver',{mode:'policy',run_id:btn.dataset.replay});toast('模型加载请求已发送');}if(btn.dataset.log){const result=await api(`/api/training/${btn.dataset.log}/log`);$('#logText').textContent=result.text||'(暂无输出)';$('#logDialog').showModal();}if(btn.dataset.cancel){if(!confirm('确定停止当前训练吗？'))return;await api(`/api/training/${btn.dataset.cancel}/cancel`,'POST');await refreshRuns();}}catch(err){toast(err.message);}});
 $('#closeLog').addEventListener('click',()=>$('#logDialog').close());
 $('#stream').addEventListener('error',()=>{if(state.session)toast('暂未收到视频帧，请检查仿真状态和 OpenGL 配置');});
