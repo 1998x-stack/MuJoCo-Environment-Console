@@ -45,6 +45,9 @@ jobs:
       - name: JavaScript syntax
         run: node --check app/static/app.js
 
+      - name: UI accessibility and interaction tests
+        run: node --test tests/ui_accessibility.test.mjs
+
       - name: Shell syntax
         run: bash -n scripts/*.sh
 
