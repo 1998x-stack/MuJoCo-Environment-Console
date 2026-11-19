@@ -15,4 +15,6 @@
 4. 保留焦点的训练列表增量刷新、空奖励正确展示。
 5. 三栏响应式设计令牌、44px 控件、焦点/动效规范与交互测试。
 
+本轮代码 \`32d5855\` 的 [GitHub Actions CI](https://github.com/1998x-stack/MuJoCo-Environment-Console/actions/runs/44470889792) **PASS**：严格镜像 93 passed / 0 skipped、18/18 环境、MJPEG 57 个 CRLF 分片、PPO/SAC smoke。真实浏览器和目标服务器部署仍 NOT_RUN。
+
 项目遵守不自动合并；PR #1 尚未合并，本 PR 需要先审查依赖和最终 CI。
