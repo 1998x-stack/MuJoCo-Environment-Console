@@ -6,3 +6,214 @@
 [hidden]{display:none!important}
 
 progress.bar{width:100%;height:5px;border:0;appearance:none;-webkit-appearance:none;display:block}progress.bar::-webkit-progress-bar{background:#2f3c50;border-radius:5px}progress.bar::-webkit-progress-value{background:#81dfc7;border-radius:5px}progress.bar::-moz-progress-bar{background:#81dfc7;border-radius:5px}
+
+
+/*
+ * Simulation Lab — UI/UX Pro Max evidence-first control system.
+ * Accessibility / interaction / responsive / typography, in that order.
+ * The server's reported status is distinguished from FPS targets and training goals.
+ */
+:root {
+  --bg:#0b1220; --panel:#111e2e; --card:#17273a; --card2:#1a3045;
+  --border:#34495e; --fg:#eef5fb; --muted:#b0c4d4;
+  --accent:#78dbc6; --blue:#8cc8f5; --orange:#f5c988;
+  --ux-surface:#132538; --ux-surface-raised:#182d42;
+  --ux-border:#405b72; --ux-focus:#a1e2ff;
+  --ux-ok:#82e0c1; --ux-warn:#ffd18d; --ux-error:#ffacb4;
+  --ux-radius:13px;
+}
+html { color-scheme:dark; scroll-behavior:smooth }
+body { min-width:0; font-size:16px; line-height:1.5; background:var(--bg) }
+button, input { font:inherit }
+button { -webkit-tap-highlight-color:transparent }
+button:focus-visible, input:focus-visible, a:focus-visible,
+dialog button:focus-visible, .algo-select input:focus-visible+span {
+  outline:3px solid var(--ux-focus)!important;outline-offset:3px;
+  box-shadow:0 0 0 5px #75bceb3a;
+}
+button:disabled { opacity:.53;cursor:not-allowed }
+.sr-only { position:absolute!important;width:1px!important;height:1px!important;padding:0!important;
+  margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;
+  white-space:nowrap!important;border:0!important }
+.skip-link { position:fixed;top:8px;left:8px;z-index:201;background:var(--ux-focus);
+  color:#071928;border-radius:10px;padding:12px 16px;font-weight:700;
+  transform:translateY(-150%);transition:transform .15s }
+.skip-link:focus { transform:translateY(0) }
+.topbar { background:#101e30;border-bottom-color:var(--ux-border);box-shadow:0 1px 0 #ffffff0b }
+.brand strong { font-size:14px;letter-spacing:1px }
+.brand small { color:var(--muted);font-size:11px;letter-spacing:.1em }
+.header-center { font-size:11px;letter-spacing:.12em;color:var(--muted) }
+.build-label { font-size:12px;color:var(--muted) }
+.ghost, .ghost.small, .link-button { min-height:44px;border-radius:10px;font-size:13px }
+.ghost { color:var(--fg);border-color:var(--ux-border);background:var(--ux-surface-raised) }
+.ghost:hover:not(:disabled) { background:#22405b;border-color:var(--blue) }
+.workspace { grid-template-columns:minmax(245px,275px) minmax(0,1fr) minmax(285px,325px) }
+.catalog-panel,.train-panel { background:#102033;padding:22px 16px }
+.sim-panel { background:radial-gradient(ellipse at 25% 0%,#163047 0%,#0c1928 55%);
+  padding:27px 25px 24px;min-width:0 }
+.eyebrow { color:var(--accent);font-size:11px;letter-spacing:.12em }
+.panel-head h1,.panel-head h2 { font-size:21px;line-height:1.35 }
+.sim-title h2 { font-size:clamp(22px,2.1vw,29px);line-height:1.25 }
+.sim-title p { font-size:13px;line-height:1.6;color:var(--muted) }
+.panel-head { gap:12px }
+.counter { font-size:13px;border-color:var(--ux-border) }
+.search-wrap { min-height:46px;background:var(--ux-surface);border-color:var(--ux-border);border-radius:11px }
+.search-wrap:focus-within { border-color:var(--ux-focus);box-shadow:0 0 0 3px #75bceb38 }
+.search-wrap input { font-size:14px;min-width:0;outline:none!important;box-shadow:none!important }
+.search-wrap input::placeholder { color:#a2b9cd }
+.results-summary { font-size:12px;color:var(--muted);min-height:20px;margin-top:9px }
+.category-tabs { gap:8px;padding:13px 0 }
+.category-tabs button { min-height:44px;padding:9px 13px;font-size:13px;border:1px solid var(--ux-border);
+  background:#182a3e;color:var(--muted);border-radius:10px }
+.category-tabs button.active, .category-tabs button[aria-pressed="true"] {
+  color:#d8f9ef;background:#194e48;border-color:#58b9a5;font-weight:700
+}
+.category-tabs button:hover { border-color:#80c8de }
+.env-list { scrollbar-color:#41647a transparent }
+.env-card { min-height:62px;border-color:transparent;border-radius:12px;gap:10px;padding:11px 9px }
+.env-card:hover { background:#1a3549 }
+.env-card.active { border-color:#65bda9;background:#19433f }
+.env-card .env-icon { font-size:12px;letter-spacing:.05em;font-weight:800;color:#b3e9dc;
+  border-color:#426477;background:#17334a;border-radius:11px }
+.env-info strong { font-size:14px;line-height:1.45 }
+.env-info small { font-size:12px;color:var(--muted);line-height:1.4 }
+.env-status { font-size:12px }
+.catalog-note { border-color:var(--ux-border);background:#152c41 }
+.catalog-note strong { font-size:13px }
+.catalog-note small { font-size:12px;color:var(--muted) }
+.viewport { border-color:#53718a;border-radius:var(--ux-radius);
+  box-shadow:0 16px 48px #00000028;max-height:600px }
+.viewport-placeholder strong { font-size:20px }
+.viewport-placeholder small { color:var(--muted);font-size:13px;line-height:1.7 }
+.viewport-chip { font-size:11px;letter-spacing:.03em;border-color:#678397;color:#dfecf7 }
+.viewport-bottom { font-size:11px;letter-spacing:.04em;color:#e0edf6 }
+.live-indicator { min-height:34px;font-size:12px;color:var(--muted);letter-spacing:.04em;
+  border-color:var(--ux-border) }
+.live-indicator.paused { color:var(--ux-warn);background:#392d27 }
+.live-indicator.paused span { background:var(--ux-warn);box-shadow:none }
+.live-indicator.error { color:var(--ux-error);border-color:#925466 }
+.viewer-telemetry { margin-top:18px;padding:16px 18px;border:1px solid var(--ux-border);
+  border-radius:var(--ux-radius);background:linear-gradient(140deg,#142c41,#102436) }
+.telemetry-heading { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap }
+.telemetry-heading h3 { margin:0;font-size:15px;letter-spacing:.01em }
+.telemetry-heading small { font-size:12px;color:var(--muted) }
+.telemetry-grid { margin:14px 0 6px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px }
+.telemetry-grid>div { border:1px solid #2e536a;background:#0e2336;border-radius:10px;padding:12px;min-width:0 }
+.telemetry-grid dt { color:var(--muted);font-size:12px;line-height:1.4 }
+.telemetry-grid dd { font-size:15px;font-weight:750;margin:7px 0 0;line-height:1.35;
+  font-variant-numeric:tabular-nums;overflow-wrap:anywhere }
+.telemetry-caption { margin:10px 0 0;font-size:12px;color:var(--muted);line-height:1.65 }
+.control-strip { flex-wrap:wrap;gap:10px 12px;margin-top:4px;padding-bottom:9px }
+.control-label,.field-label { font-size:12px;color:var(--muted);letter-spacing:.06em }
+.seg-controls { border-color:var(--ux-border);border-radius:11px;background:#14273b }
+.seg-controls button { min-height:44px;font-size:13px;border-radius:8px;padding:10px 14px }
+.seg-controls button.active { background:#205449;color:#d7fff1 }
+.control-right { gap:8px;flex-wrap:wrap }
+.control-right button { min-height:44px;font-size:13px;padding:10px 14px }
+.driver-help { margin:0 0 14px;font-size:12px;color:var(--muted);line-height:1.6 }
+.metrics { gap:10px }
+.metric { background:#15283b;border-color:#36556b;border-radius:12px;min-width:0;padding:14px }
+.metric small,.details-grid small { font-size:11px;letter-spacing:.045em;white-space:normal;line-height:1.4;color:var(--muted) }
+.metric strong { font-size:clamp(18px,1.6vw,24px);margin-top:10px;font-variant-numeric:tabular-nums }
+.metric:first-child strong { font-size:18px;color:var(--ux-ok) }
+.info-section { margin-top:24px }
+.section-label { font-size:11px }
+.details-grid b { font-size:13px;line-height:1.6 }
+.notice { font-size:13px;line-height:1.65;color:var(--muted);border-left:3px solid #83b8d7 }
+.notice.is-error { border-left-color:var(--ux-error);color:#ffe0e3;background:#392634 }
+.train-card { border-color:var(--ux-border);background:#142a3e;border-radius:var(--ux-radius);padding:18px }
+.algo-select { gap:10px }
+.algo-select label span { padding:13px;min-height:58px;background:#162d42;border-color:#49677e }
+.algo-select input:checked+span { border-color:#75d2b7;background:#1b4a43 }
+.algo-select strong { font-size:17px }
+.algo-select small { font-size:12px;color:var(--muted) }
+.field-label span { font-size:11px;color:var(--muted) }
+.step-input { min-height:48px;font-size:16px;background:#0f2335;border-color:var(--ux-border) }
+.step-feedback { min-height:22px;font-size:12px;color:var(--ux-ok);margin:9px 0 3px }
+.step-feedback.is-error { color:var(--ux-error) }
+.step-input[aria-invalid="true"] { border-color:var(--ux-error) }
+.step-presets { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:9px }
+.step-presets button { min-height:44px;font-size:13px;border-radius:9px;padding:9px 6px;
+  color:var(--fg);background:#1b3548;border:1px solid var(--ux-border) }
+.step-presets button[aria-pressed="true"] { border-color:#75d2b7;color:#d5ffee;background:#205046 }
+.field-hint { font-size:12px;line-height:1.65;color:var(--muted) }
+.primary-btn { min-height:48px;font-size:14px }
+.run-section { margin-top:24px }
+.link-button { padding:8px 12px;border:1px solid var(--ux-border);border-radius:9px }
+.run-card { background:#142b40;border-color:#3e5c72;padding:14px;border-radius:12px }
+.run-card strong { font-size:14px }
+.run-card small,.run-card p { font-size:12px;color:var(--muted);line-height:1.55 }
+.pill { font-size:11px;font-weight:750;border-radius:7px;line-height:1.4 }
+.run-actions { gap:8px }
+.run-actions button { min-height:44px;padding:10px 12px;font-size:12px;border-color:var(--ux-border);border-radius:9px }
+.run-reward { color:var(--ux-ok)!important }
+.empty-runs { font-size:13px;line-height:1.6 }
+.small-note strong { font-size:13px }
+.small-note p { font-size:12px;color:var(--muted) }
+.login-card { border-color:var(--ux-border) }
+.login-card p { font-size:14px }
+.login-card label,.login-card small { font-size:12px }
+.login-card input { min-height:48px;font-size:16px }
+.form-error { font-size:13px;line-height:1.5 }
+.toast { font-size:13px;line-height:1.6 }
+dialog { border-color:var(--ux-border) }
+dialog pre { font-size:12px }
+footer { min-height:48px;height:auto;font-size:11px;line-height:1.5;letter-spacing:.04em;padding:12px 20px }
+@media(max-width:1280px) {
+ .workspace { grid-template-columns:245px minmax(0,1fr) }
+ .train-panel { grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;
+   border-left:0;border-top:1px solid var(--ux-border) }
+ .train-panel>.panel-head,.train-panel>.small-note { grid-column:1/-1 }
+ .train-card,.run-section,.small-note { margin-top:0 }
+ .catalog-panel,.train-panel { padding:20px 14px }
+ .sim-panel { padding:23px 20px }
+}
+@media(max-width:780px) {
+ .workspace { display:block }
+ .catalog-panel { border-right:0;border-bottom:1px solid var(--ux-border) }
+ .catalog-panel .env-list { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;
+   max-height:280px;min-height:120px }
+ .env-card { padding:10px 7px;gap:7px;min-width:0 }
+ .env-info strong { font-size:13px }
+ .env-info small { font-size:11px }
+ .sim-panel { padding:18px 14px }
+ .train-panel { display:block;padding:20px 14px }
+ .run-section,.small-note { margin-top:22px }
+ .telemetry-grid { grid-template-columns:repeat(2,minmax(0,1fr)) }
+ .metrics { grid-template-columns:repeat(2,minmax(0,1fr));gap:8px }
+ .metric small { font-size:11px }
+ .metric strong { font-size:21px }
+ .viewport { max-height:none }
+ .viewport-top { left:10px;right:10px;top:10px }
+ .viewport-bottom { left:10px;right:10px;bottom:10px;font-size:10px }
+ .control-strip { align-items:stretch }
+ .control-label { width:100% }
+ .seg-controls { flex:1 }
+ .seg-controls button { flex:1 }
+ .control-right { flex:1;justify-content:flex-end }
+ .panel-head { margin-bottom:14px }
+ .topbar { padding:0 14px }
+ .brand strong { font-size:12px }
+ .head-right { gap:6px }
+ footer { flex-wrap:wrap;justify-content:center;text-align:center }
+}
+@media(max-width:400px) {
+ .topbar { gap:8px }
+ .brand { gap:7px }
+ .brand-icon { font-size:26px }
+ .brand small { font-size:10px;letter-spacing:0 }
+ .head-right button { padding:8px 9px;font-size:12px }
+ .catalog-panel .env-list { grid-template-columns:1fr }
+ .viewport-chip { font-size:9px;padding:5px }
+ .telemetry-grid { gap:7px }
+ .telemetry-grid>div { padding:10px }
+ .telemetry-grid dd { font-size:13px }
+ .control-right { margin-left:0;justify-content:stretch;width:100% }
+ .control-right button { flex:1 }
+ .step-presets button { font-size:12px }
+}
+@media(prefers-reduced-motion:reduce){
+ html { scroll-behavior:auto }
+ *,*::before,*::after { animation-duration:.01ms!important;transition-duration:.01ms!important }
+ .skip-link { transition:none }
+}
